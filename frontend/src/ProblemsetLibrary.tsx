@@ -401,11 +401,11 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                     title="选择本页所有题目"
                   />
                 </th>
-                <th style={{ padding: '12px 16px', width: '180px' }}>代码 (Code)</th>
-                <th style={{ padding: '12px 16px' }}>题目名称 (Problem Title)</th>
+                <th style={{ padding: '12px 16px', width: '150px' }}>代码 (Code)</th>
+                <th style={{ padding: '12px 16px', width: '35%' }}>题目名称 (Problem Title)</th>
                 <th 
                   onClick={handleSortByRating}
-                  style={{ padding: '12px 16px', width: '160px', cursor: 'pointer', userSelect: 'none' }}
+                  style={{ padding: '12px 16px', width: '130px', cursor: 'pointer', userSelect: 'none' }}
                   className="hover-sortable"
                   title="点击按难度评分排序"
                 >
@@ -418,8 +418,8 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                     )}
                   </div>
                 </th>
-                <th style={{ padding: '12px 16px', width: '150px' }}>解出人数 (Solves)</th>
-                <th style={{ padding: '12px 16px', width: '300px' }}>标签 (Tags)</th>
+                <th style={{ padding: '12px 16px', width: '130px' }}>解出人数 (Solves)</th>
+                <th style={{ padding: '12px 16px' }}>标签 (Tags)</th>
               </tr>
             </thead>
             <tbody>
