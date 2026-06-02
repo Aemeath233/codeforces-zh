@@ -33,6 +33,139 @@ export const App: React.FC = () => {
   const [isLoadingProblem, setIsLoadingProblem] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // Batch translation queue state (lifted up for persistence across unmounts)
+  const [batchQueue, setBatchQueue] = useState<{
+    isActive: boolean;
+    total: number;
+    currentIndex: number;
+    currentProblemId: string | null;
+    statusText: string;
+    timerCountdown: number;
+  }>({
+    isActive: false,
+    total: 0,
+    currentIndex: 0,
+    currentProblemId: null,
+    statusText: '',
+    timerCountdown: 0
+  });
+
+  const cancelBatchRef = React.useRef(false);
+
+  // Start the background batch translation loop
+  const handleStartBatchTranslation = async (selectedProblems: any[]) => {
+    cancelBatchRef.current = false;
+    setBatchQueue({
+      isActive: true,
+      total: selectedProblems.length,
+      currentIndex: 0,
+      currentProblemId: null,
+      statusText: '正在准备批量翻译...',
+      timerCountdown: 0
+    });
+
+    showToast(`已启动批量翻译队列，共 ${selectedProblems.length} 道题目...`, 'success');
+
+    for (let i = 0; i < selectedProblems.length; i++) {
+      if (cancelBatchRef.current) {
+        break;
+      }
+
+      const p = selectedProblems[i];
+      setBatchQueue(prev => ({
+        ...prev,
+        currentIndex: i + 1,
+        currentProblemId: p.id,
+        statusText: `正在抓取并翻译第 ${i + 1}/${selectedProblems.length} 道题: ${p.contest_id}${p.index}...`
+      }));
+
+      let isCached = false;
+      try {
+        // Trigger scraping and translation on the backend by hitting the GET endpoint
+        const response = await fetch(`http://localhost:8000/api/problem/${p.contest_id}/${p.index}`);
+        if (!response.ok) {
+          throw new Error('翻译接口返回异常');
+        }
+        
+        const data = await response.json();
+        // Check if the source is served from local cache
+        if (data.source === 'cache') {
+          isCached = true;
+          console.log(`Problem ${p.contest_id}${p.index} loaded from cache. Skipping delay.`);
+        }
+      } catch (err) {
+        console.error(`Batch translation failed for ${p.contest_id}${p.index}:`, err);
+        showToast(`题目 ${p.contest_id}${p.index} 预翻译失败，已跳过。`, 'error');
+      }
+
+      // If there are more problems, start a 60-second countdown (only if it wasn't cached)
+      if (i < selectedProblems.length - 1) {
+        if (cancelBatchRef.current) break;
+
+        if (isCached) {
+          // If the problem was already cached, skip delay and jump directly to the next one!
+          continue;
+        }
+
+        let secondsLeft = 60;
+        setBatchQueue(prev => ({
+          ...prev,
+          currentProblemId: null,
+          statusText: `第 ${i + 1}/${selectedProblems.length} 道已成功预热！安全防风控冷却中...`,
+          timerCountdown: secondsLeft
+        }));
+
+        const intervalId = setInterval(() => {
+          secondsLeft--;
+          setBatchQueue(prev => {
+            if (prev.timerCountdown <= 1 || cancelBatchRef.current) {
+              clearInterval(intervalId);
+            }
+            return {
+              ...prev,
+              timerCountdown: Math.max(0, secondsLeft)
+            };
+          });
+        }, 1000);
+
+        // Sleep for 60 seconds (checking cancel status every 1 second for instant abort)
+        for (let s = 0; s < 60; s++) {
+          if (cancelBatchRef.current) {
+            clearInterval(intervalId);
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        clearInterval(intervalId);
+      }
+    }
+
+    // Done
+    if (!cancelBatchRef.current) {
+      showToast(`🎉 批量预翻译任务已全部圆满完成！已选题目已被本地离线缓存。`, 'success');
+    } else {
+      showToast('批量翻译任务已手动取消。', 'error');
+    }
+    
+    setBatchQueue({
+      isActive: false,
+      total: 0,
+      currentIndex: 0,
+      currentProblemId: null,
+      statusText: '',
+      timerCountdown: 0
+    });
+  };
+
+  const handleCancelBatchTranslation = () => {
+    cancelBatchRef.current = true;
+    setBatchQueue(prev => ({
+      ...prev,
+      statusText: '正在终止任务并清理队列...',
+      timerCountdown: 0
+    }));
+  };
+
   // Synchronize tab and problem states to localStorage
   React.useEffect(() => {
     localStorage.setItem('cf_active_tab', activeTab);
@@ -180,7 +313,13 @@ export const App: React.FC = () => {
         )}
 
         {!isLoadingProblem && activeTab === 'problemset' && (
-          <ProblemsetLibrary onSelectProblem={handleFetchProblem} onShowToast={showToast} />
+          <ProblemsetLibrary 
+            onSelectProblem={handleFetchProblem} 
+            onShowToast={showToast} 
+            batchQueue={batchQueue}
+            onStartBatch={handleStartBatchTranslation}
+            onCancelBatch={handleCancelBatchTranslation}
+          />
         )}
 
         {!isLoadingProblem && activeTab === 'cached' && (
@@ -215,6 +354,77 @@ export const App: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* 4. Global Floating Batch Queue Progress Widget */}
+      {batchQueue.isActive && activeTab !== 'problemset' && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          left: '24px',
+          zIndex: 99,
+          width: '320px',
+          padding: '16px',
+          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '16px',
+          boxShadow: 'var(--shadow-premium)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          animation: 'scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div className="spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></div>
+              <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--primary)' }}>
+                批量预热翻译中 ({batchQueue.currentIndex}/{batchQueue.total})
+              </span>
+            </div>
+            <button
+              onClick={handleCancelBatchTranslation}
+              className="btn-secondary"
+              style={{
+                padding: '2px 6px',
+                fontSize: '11px',
+                color: 'var(--danger)',
+                borderColor: 'HSL(350, 89%, 90%)',
+                backgroundColor: 'white',
+                fontWeight: 600
+              }}
+            >
+              取消
+            </button>
+          </div>
+
+          <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {batchQueue.statusText}
+          </div>
+
+          {/* Progress Bar */}
+          <div style={{
+            width: '100%',
+            height: '4px',
+            backgroundColor: 'var(--border-color)',
+            borderRadius: '2px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              width: `${(batchQueue.currentIndex / batchQueue.total) * 100}%`,
+              height: '100%',
+              backgroundColor: 'var(--primary)',
+              transition: 'width 0.4s ease'
+            }}></div>
+          </div>
+
+          {batchQueue.timerCountdown > 0 && (
+            <div style={{ fontSize: '11px', color: 'var(--primary)', fontWeight: 600 }}>
+              ⏱️ 安全冷却倒计时: {batchQueue.timerCountdown} 秒下一题...
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

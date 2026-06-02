@@ -15,6 +15,16 @@ interface Problem {
 interface ProblemsetLibraryProps {
   onSelectProblem: (contestId: number, index: string) => void;
   onShowToast: (message: string, type: 'success' | 'error') => void;
+  batchQueue: {
+    isActive: boolean;
+    total: number;
+    currentIndex: number;
+    currentProblemId: string | null;
+    statusText: string;
+    timerCountdown: number;
+  };
+  onStartBatch: (selectedProblems: any[]) => Promise<void>;
+  onCancelBatch: () => void;
 }
 
 // Curated list of popular Codeforces tags for the selector
@@ -26,7 +36,13 @@ const POPULAR_TAGS = [
   "bitmasks", "dsu", "shortest paths", "probabilities"
 ];
 
-export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({ onSelectProblem, onShowToast }) => {
+export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({ 
+  onSelectProblem, 
+  onShowToast,
+  batchQueue,
+  onStartBatch,
+  onCancelBatch
+}) => {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState<number>(() => {
@@ -54,135 +70,6 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({ onSelectPr
 
   // Checkbox selection states
   const [selectedProblemIds, setSelectedProblemIds] = useState<string[]>([]);
-  
-  // Batch translation queue state
-  const [batchQueue, setBatchQueue] = useState<{
-    isActive: boolean;
-    total: number;
-    currentIndex: number;
-    currentProblemId: string | null;
-    statusText: string;
-    timerCountdown: number;
-  }>({
-    isActive: false,
-    total: 0,
-    currentIndex: 0,
-    currentProblemId: null,
-    statusText: '',
-    timerCountdown: 0
-  });
-
-  // Ref to support task cancellation
-  const cancelBatchRef = React.useRef(false);
-
-  // Start the background batch translation loop
-  const handleStartBatchTranslation = async () => {
-    const selectedProblems = problems.filter(p => selectedProblemIds.includes(p.id));
-    if (selectedProblems.length === 0) {
-      onShowToast('请先勾选需要批量翻译的题目！', 'error');
-      return;
-    }
-
-    cancelBatchRef.current = false;
-    setBatchQueue({
-      isActive: true,
-      total: selectedProblems.length,
-      currentIndex: 0,
-      currentProblemId: null,
-      statusText: '正在准备批量翻译...',
-      timerCountdown: 0
-    });
-
-    onShowToast(`已启动批量翻译队列，共 ${selectedProblems.length} 道，每分钟翻译一道...`, 'success');
-
-    for (let i = 0; i < selectedProblems.length; i++) {
-      if (cancelBatchRef.current) {
-        break;
-      }
-
-      const p = selectedProblems[i];
-      setBatchQueue(prev => ({
-        ...prev,
-        currentIndex: i + 1,
-        currentProblemId: p.id,
-        statusText: `正在抓取并翻译第 ${i + 1}/${selectedProblems.length} 道题: ${p.contest_id}${p.index}...`
-      }));
-
-      try {
-        // Trigger scraping and translation on the backend by hitting the GET endpoint
-        const response = await fetch(`http://localhost:8000/api/problem/${p.contest_id}/${p.index}`);
-        if (!response.ok) {
-          throw new Error('翻译接口返回异常');
-        }
-      } catch (err) {
-        console.error(`Batch translation failed for ${p.contest_id}${p.index}:`, err);
-        onShowToast(`题目 ${p.contest_id}${p.index} 预翻译失败，已跳过。`, 'error');
-      }
-
-      // If there are more problems, start a 60-second countdown
-      if (i < selectedProblems.length - 1) {
-        if (cancelBatchRef.current) break;
-
-        let secondsLeft = 60;
-        setBatchQueue(prev => ({
-          ...prev,
-          currentProblemId: null,
-          statusText: `第 ${i + 1}/${selectedProblems.length} 道预翻译已完成！安全防风控冷却中...`,
-          timerCountdown: secondsLeft
-        }));
-
-        // We run a 1-second interval to update the visual countdown countdown
-        const intervalId = setInterval(() => {
-          secondsLeft--;
-          setBatchQueue(prev => {
-            if (prev.timerCountdown <= 1 || cancelBatchRef.current) {
-              clearInterval(intervalId);
-            }
-            return {
-              ...prev,
-              timerCountdown: Math.max(0, secondsLeft)
-            };
-          });
-        }, 1000);
-
-        // Sleep for 60 seconds (or break early if cancelled)
-        for (let s = 0; s < 60; s++) {
-          if (cancelBatchRef.current) {
-            clearInterval(intervalId);
-            break;
-          }
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-        clearInterval(intervalId);
-      }
-    }
-
-    // Done
-    if (!cancelBatchRef.current) {
-      onShowToast(`🎉 批量预翻译任务已全部圆满完成！已选题目已被本地离线缓存。`, 'success');
-    } else {
-      onShowToast('批量翻译任务已手动取消。', 'error');
-    }
-    
-    setSelectedProblemIds([]);
-    setBatchQueue({
-      isActive: false,
-      total: 0,
-      currentIndex: 0,
-      currentProblemId: null,
-      statusText: '',
-      timerCountdown: 0
-    });
-  };
-
-  const handleCancelBatchTranslation = () => {
-    cancelBatchRef.current = true;
-    setBatchQueue(prev => ({
-      ...prev,
-      statusText: '正在终止任务并清理队列...',
-      timerCountdown: 0
-    }));
-  };
 
   // Synchronize states to localStorage whenever they change
   useEffect(() => {
@@ -451,7 +338,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({ onSelectPr
                 </span>
               </div>
               <button
-                onClick={handleCancelBatchTranslation}
+                onClick={onCancelBatch}
                 className="btn-secondary"
                 style={{
                   padding: '4px 10px',
@@ -527,7 +414,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({ onSelectPr
                 取消选择
               </button>
               <button
-                onClick={handleStartBatchTranslation}
+                onClick={() => onStartBatch(problems.filter(p => selectedProblemIds.includes(p.id)))}
                 className="search-button"
                 style={{
                   padding: '6px 16px',
