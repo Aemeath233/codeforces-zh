@@ -52,6 +52,138 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({ onSelectPr
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Checkbox selection states
+  const [selectedProblemIds, setSelectedProblemIds] = useState<string[]>([]);
+  
+  // Batch translation queue state
+  const [batchQueue, setBatchQueue] = useState<{
+    isActive: boolean;
+    total: number;
+    currentIndex: number;
+    currentProblemId: string | null;
+    statusText: string;
+    timerCountdown: number;
+  }>({
+    isActive: false,
+    total: 0,
+    currentIndex: 0,
+    currentProblemId: null,
+    statusText: '',
+    timerCountdown: 0
+  });
+
+  // Ref to support task cancellation
+  const cancelBatchRef = React.useRef(false);
+
+  // Start the background batch translation loop
+  const handleStartBatchTranslation = async () => {
+    const selectedProblems = problems.filter(p => selectedProblemIds.includes(p.id));
+    if (selectedProblems.length === 0) {
+      onShowToast('请先勾选需要批量翻译的题目！', 'error');
+      return;
+    }
+
+    cancelBatchRef.current = false;
+    setBatchQueue({
+      isActive: true,
+      total: selectedProblems.length,
+      currentIndex: 0,
+      currentProblemId: null,
+      statusText: '正在准备批量翻译...',
+      timerCountdown: 0
+    });
+
+    onShowToast(`已启动批量翻译队列，共 ${selectedProblems.length} 道，每分钟翻译一道...`, 'success');
+
+    for (let i = 0; i < selectedProblems.length; i++) {
+      if (cancelBatchRef.current) {
+        break;
+      }
+
+      const p = selectedProblems[i];
+      setBatchQueue(prev => ({
+        ...prev,
+        currentIndex: i + 1,
+        currentProblemId: p.id,
+        statusText: `正在抓取并翻译第 ${i + 1}/${selectedProblems.length} 道题: ${p.contest_id}${p.index}...`
+      }));
+
+      try {
+        // Trigger scraping and translation on the backend by hitting the GET endpoint
+        const response = await fetch(`http://localhost:8000/api/problem/${p.contest_id}/${p.index}`);
+        if (!response.ok) {
+          throw new Error('翻译接口返回异常');
+        }
+      } catch (err) {
+        console.error(`Batch translation failed for ${p.contest_id}${p.index}:`, err);
+        onShowToast(`题目 ${p.contest_id}${p.index} 预翻译失败，已跳过。`, 'error');
+      }
+
+      // If there are more problems, start a 60-second countdown
+      if (i < selectedProblems.length - 1) {
+        if (cancelBatchRef.current) break;
+
+        let secondsLeft = 60;
+        setBatchQueue(prev => ({
+          ...prev,
+          currentProblemId: null,
+          statusText: `第 ${i + 1}/${selectedProblems.length} 道预翻译已完成！安全防风控冷却中...`,
+          timerCountdown: secondsLeft
+        }));
+
+        // We run a 1-second interval to update the visual countdown countdown
+        const intervalId = setInterval(() => {
+          secondsLeft--;
+          setBatchQueue(prev => {
+            if (prev.timerCountdown <= 1 || cancelBatchRef.current) {
+              clearInterval(intervalId);
+            }
+            return {
+              ...prev,
+              timerCountdown: Math.max(0, secondsLeft)
+            };
+          });
+        }, 1000);
+
+        // Sleep for 60 seconds (or break early if cancelled)
+        for (let s = 0; s < 60; s++) {
+          if (cancelBatchRef.current) {
+            clearInterval(intervalId);
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        clearInterval(intervalId);
+      }
+    }
+
+    // Done
+    if (!cancelBatchRef.current) {
+      onShowToast(`🎉 批量预翻译任务已全部圆满完成！已选题目已被本地离线缓存。`, 'success');
+    } else {
+      onShowToast('批量翻译任务已手动取消。', 'error');
+    }
+    
+    setSelectedProblemIds([]);
+    setBatchQueue({
+      isActive: false,
+      total: 0,
+      currentIndex: 0,
+      currentProblemId: null,
+      statusText: '',
+      timerCountdown: 0
+    });
+  };
+
+  const handleCancelBatchTranslation = () => {
+    cancelBatchRef.current = true;
+    setBatchQueue(prev => ({
+      ...prev,
+      statusText: '正在终止任务并清理队列...',
+      timerCountdown: 0
+    }));
+  };
+
   // Synchronize states to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('cf_lib_page', page.toString());
@@ -298,11 +430,141 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({ onSelectPr
       {/* Grid Library List */}
       <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-premium)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
+        {/* Batch Control Panel */}
+        {batchQueue.isActive && (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            padding: '16px 20px',
+            backgroundColor: 'var(--primary-light)',
+            border: '1px solid HSL(221, 83%, 90%)',
+            borderRadius: '12px',
+            marginBottom: '4px',
+            animation: 'fadeIn 0.3s ease'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></div>
+                <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--primary)' }}>
+                  🤖 后台批量预热翻译进行中 ({batchQueue.currentIndex}/{batchQueue.total})
+                </span>
+              </div>
+              <button
+                onClick={handleCancelBatchTranslation}
+                className="btn-secondary"
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  color: 'var(--danger)',
+                  borderColor: 'HSL(350, 89%, 90%)',
+                  backgroundColor: 'white',
+                  fontWeight: 600
+                }}
+              >
+                取消任务
+              </button>
+            </div>
+            
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              {batchQueue.statusText}
+            </div>
+            
+            {/* Progress Bar */}
+            <div style={{
+              width: '100%',
+              height: '6px',
+              backgroundColor: 'var(--border-color)',
+              borderRadius: '3px',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                width: `${(batchQueue.currentIndex / batchQueue.total) * 100}%`,
+                height: '100%',
+                backgroundColor: 'var(--primary)',
+                transition: 'width 0.4s ease'
+              }}></div>
+            </div>
+
+            {batchQueue.timerCountdown > 0 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '12.5px',
+                color: 'var(--primary)',
+                fontWeight: 600
+              }}>
+                <span>⏱️ 为防止 Codeforces WAF 与大模型频限，正在安全冷却中：还剩 {batchQueue.timerCountdown} 秒下一题...</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Selected Control Bar */}
+        {selectedProblemIds.length > 0 && !batchQueue.isActive && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '12px 20px',
+            backgroundColor: 'var(--bg-hover)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '12px',
+            marginBottom: '4px',
+            animation: 'fadeIn 0.2s ease'
+          }}>
+            <div style={{ fontSize: '13.5px', color: 'var(--text-secondary)' }}>
+              已选中 <strong style={{ color: 'var(--primary)' }}>{selectedProblemIds.length}</strong> 道题目
+            </div>
+            
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setSelectedProblemIds([])}
+                className="btn-secondary"
+                style={{ padding: '6px 12px', fontSize: '12.5px', fontWeight: 600 }}
+              >
+                取消选择
+              </button>
+              <button
+                onClick={handleStartBatchTranslation}
+                className="search-button"
+                style={{
+                  padding: '6px 16px',
+                  fontSize: '12.5px',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>🚀 批量翻译预热 (每题冷却 60s)</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Table representation */}
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>
+                <th style={{ padding: '12px 16px', width: '40px' }}>
+                  <input
+                    type="checkbox"
+                    checked={problems.length > 0 && selectedProblemIds.length === problems.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedProblemIds(problems.map(p => p.id));
+                      } else {
+                        setSelectedProblemIds([]);
+                      }
+                    }}
+                    disabled={batchQueue.isActive}
+                    style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                    title="选择本页所有题目"
+                  />
+                </th>
                 <th style={{ padding: '12px 16px', width: '120px' }}>代码 (Code)</th>
                 <th style={{ padding: '12px 16px' }}>题目名称 (Problem Title)</th>
                 <th 
@@ -327,20 +589,21 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({ onSelectPr
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: '60px 0', textAlign: 'center' }}>
+                  <td colSpan={6} style={{ padding: '60px 0', textAlign: 'center' }}>
                     <div className="spinner" style={{ margin: '0 auto 16px auto', width: '36px', height: '36px' }}></div>
                     <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>正在为您检索本地算法题库...</div>
                   </td>
                 </tr>
               ) : problems.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <td colSpan={6} style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
                     没有找到符合筛选条件的题目。请尝试清空筛选条件或重新同步官方题库。
                   </td>
                 </tr>
               ) : (
                 problems.map((p) => {
                   const ratingStyle = getRatingStyle(p.rating);
+                  const isSelected = selectedProblemIds.includes(p.id);
                   return (
                     <tr
                       key={p.id}
@@ -348,11 +611,28 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({ onSelectPr
                       style={{
                         borderBottom: '1px solid var(--border-color)',
                         cursor: 'pointer',
-                        transition: 'background-color var(--transition-fast)'
+                        transition: 'background-color var(--transition-fast)',
+                        backgroundColor: isSelected ? 'var(--primary-light)' : 'transparent'
                       }}
                       className="contest-card-row"
                     >
-                      {/* Code badge */}
+                      {/* Checkbox */}
+                      <td style={{ padding: '16px', width: '40px' }} onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedProblemIds(prev => [...prev, p.id]);
+                            } else {
+                              setSelectedProblemIds(prev => prev.filter(id => id !== p.id));
+                            }
+                          }}
+                          disabled={batchQueue.isActive}
+                          style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                        />
+                      </td>
+
                       {/* Code badge */}
                       <td style={{ padding: '16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
