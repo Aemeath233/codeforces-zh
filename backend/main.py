@@ -430,13 +430,21 @@ def get_cached_problems(db: Session = Depends(get_db)):
     """
     Returns all locally cached translated problems, sorted by translation date.
     """
-    cached_list = db.query(CachedProblem).order_by(CachedProblem.created_at.desc()).all()
+    cached_list = db.query(
+        CachedProblem,
+        ProblemsetLibrary.rating
+    ).outerjoin(
+        ProblemsetLibrary,
+        CachedProblem.id == ProblemsetLibrary.id
+    ).order_by(
+        CachedProblem.created_at.desc()
+    ).all()
     
     # Fetch user solved status map
     status_map = get_user_solved_status_map(db)
     
     results = []
-    for p in cached_list:
+    for p, rating in cached_list:
         prob_key = f"{p.contest_id}_{p.index.strip().upper()}"
         results.append({
             "id": p.id,
@@ -445,7 +453,8 @@ def get_cached_problems(db: Session = Depends(get_db)):
             "title": p.title,
             "translated_title": p.translated_title,
             "created_at": p.created_at.isoformat() if p.created_at else None,
-            "solved_status": status_map.get(prob_key, "NONE")
+            "solved_status": status_map.get(prob_key, "NONE"),
+            "rating": rating
         })
     return {"status": "success", "problems": results}
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Clock, Calendar, ArrowRight } from 'lucide-react';
+import { Trash2, Clock, Calendar, ArrowRight, Star } from 'lucide-react';
 
 interface CachedProblem {
   id: string;
@@ -9,6 +9,7 @@ interface CachedProblem {
   translated_title: string;
   created_at: string | null;
   solved_status?: 'OK' | 'FAILED' | 'NONE';
+  rating?: number | null;
 }
 
 interface CachedProblemsProps {
@@ -81,6 +82,17 @@ export const CachedProblems: React.FC<CachedProblemsProps> = ({ onSelectProblem,
     }
   };
 
+  // Helper to get styled rating difficulty badges based on score
+  const getRatingStyle = (rating: number | null | undefined) => {
+    if (rating === null || rating === undefined) return { bg: 'HSL(0, 0%, 94%)', text: 'HSL(0, 0%, 40%)', name: 'Unrated' };
+    if (rating < 1200) return { bg: 'HSL(142, 70%, 94%)', text: 'HSL(142, 72%, 29%)', name: 'Novice' }; // Easy Green
+    if (rating < 1600) return { bg: 'HSL(187, 75%, 94%)', text: 'HSL(187, 85%, 28%)', name: 'Medium' }; // Cyan
+    if (rating < 1900) return { bg: 'HSL(221, 80%, 94%)', text: 'HSL(221, 83%, 45%)', name: 'Expert' }; // Blue
+    if (rating < 2100) return { bg: 'HSL(280, 70%, 94%)', text: 'HSL(280, 80%, 40%)', name: 'Candidate Master' }; // Purple
+    if (rating < 2400) return { bg: 'HSL(38, 92%, 94%)', text: 'HSL(38, 92%, 40%)', name: 'Master' }; // Orange
+    return { bg: 'HSL(350, 80%, 94%)', text: 'HSL(350, 89%, 45%)', name: 'Grandmaster' }; // Red
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Header */}
@@ -141,6 +153,12 @@ export const CachedProblems: React.FC<CachedProblemsProps> = ({ onSelectProblem,
               <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-main)' }}>
                 <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', width: '120px' }}>题号</th>
                 <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)' }}>中文译名 / 原文名称</th>
+                <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', width: '160px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Star size={14} />
+                    <span>难度评分</span>
+                  </div>
+                </th>
                 <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', width: '180px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Calendar size={14} />
@@ -151,64 +169,88 @@ export const CachedProblems: React.FC<CachedProblemsProps> = ({ onSelectProblem,
               </tr>
             </thead>
             <tbody>
-              {problems.map((p) => (
-                <tr
-                  key={p.id}
-                  onClick={() => onSelectProblem(p.contest_id, p.index)}
-                  style={{
-                    borderBottom: '1px solid var(--border-color)',
-                    cursor: 'pointer',
-                    transition: 'all var(--transition-fast)'
-                  }}
-                  className="cached-row"
-                >
-                  {/* Problem Index */}
-                  <td style={{ padding: '18px 24px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {p.solved_status === 'OK' && (
-                        <span title="已通过 (Accepted)" style={{ display: 'inline-flex', fontSize: '14px', cursor: 'default' }}>
-                          ✅
+              {problems.map((p) => {
+                const ratingStyle = getRatingStyle(p.rating);
+                return (
+                  <tr
+                    key={p.id}
+                    onClick={() => onSelectProblem(p.contest_id, p.index)}
+                    style={{
+                      borderBottom: '1px solid var(--border-color)',
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-fast)'
+                    }}
+                    className="cached-row"
+                  >
+                    {/* Problem Index */}
+                    <td style={{ padding: '18px 24px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {p.solved_status === 'OK' && (
+                          <span title="已通过 (Accepted)" style={{ display: 'inline-flex', fontSize: '14px', cursor: 'default' }}>
+                            ✅
+                          </span>
+                        )}
+                        {p.solved_status === 'FAILED' && (
+                          <span title="尝试过未通过 (Attempted)" style={{ display: 'inline-flex', fontSize: '14px', cursor: 'default' }}>
+                            ❌
+                          </span>
+                        )}
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '4px 10px',
+                          backgroundColor: 'var(--primary-light)',
+                          color: 'var(--primary)',
+                          fontWeight: 800,
+                          fontSize: '13px',
+                          borderRadius: '6px',
+                          fontFamily: 'var(--font-mono)'
+                        }}>
+                          {p.contest_id}{p.index}
                         </span>
-                      )}
-                      {p.solved_status === 'FAILED' && (
-                        <span title="尝试过未通过 (Attempted)" style={{ display: 'inline-flex', fontSize: '14px', cursor: 'default' }}>
-                          ❌
+                      </div>
+                    </td>
+  
+                    {/* Problem Title */}
+                    <td style={{ padding: '18px 24px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {p.translated_title || p.title}
                         </span>
+                        <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+                          {p.title}
+                        </span>
+                      </div>
+                    </td>
+  
+                    {/* Rating / Difficulty */}
+                    <td style={{ padding: '18px 24px' }}>
+                      {p.rating !== undefined && p.rating !== null ? (
+                        <div style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          backgroundColor: ratingStyle.bg,
+                          color: ratingStyle.text,
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: 700
+                        }} title={ratingStyle.name}>
+                          <Star size={12} fill={ratingStyle.text} style={{ color: ratingStyle.text }} />
+                          <span>{p.rating}</span>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>-</span>
                       )}
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '4px 10px',
-                        backgroundColor: 'var(--primary-light)',
-                        color: 'var(--primary)',
-                        fontWeight: 800,
-                        fontSize: '13px',
-                        borderRadius: '6px',
-                        fontFamily: 'var(--font-mono)'
-                      }}>
-                        {p.contest_id}{p.index}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Problem Title */}
-                  <td style={{ padding: '18px 24px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {p.translated_title || p.title}
-                      </span>
-                      <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
-                        {p.title}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Cache Date */}
-                  <td style={{ padding: '18px 24px', fontSize: '13px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Clock size={13} style={{ color: 'var(--text-muted)' }} />
-                      <span>{formatDate(p.created_at)}</span>
-                    </div>
-                  </td>
+                    </td>
+  
+                    {/* Cache Date */}
+                    <td style={{ padding: '18px 24px', fontSize: '13px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Clock size={13} style={{ color: 'var(--text-muted)' }} />
+                        <span>{formatDate(p.created_at)}</span>
+                      </div>
+                    </td>
 
                   {/* Action Buttons */}
                   <td style={{ padding: '18px 24px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
@@ -245,7 +287,8 @@ export const CachedProblems: React.FC<CachedProblemsProps> = ({ onSelectProblem,
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
