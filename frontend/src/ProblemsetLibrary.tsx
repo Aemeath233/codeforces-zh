@@ -401,7 +401,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                     title="选择本页所有题目"
                   />
                 </th>
-                <th style={{ padding: '12px 16px', width: '120px' }}>代码 (Code)</th>
+                <th style={{ padding: '12px 16px', width: '180px' }}>代码 (Code)</th>
                 <th style={{ padding: '12px 16px' }}>题目名称 (Problem Title)</th>
                 <th 
                   onClick={handleSortByRating}
@@ -468,21 +468,21 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                           style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
                         />
                       </td>
-
+                      
                       {/* Code badge */}
                       <td style={{ padding: '16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
                           {p.solved_status === 'OK' && (
-                            <span title="已通过 (Accepted)" style={{ display: 'inline-flex', fontSize: '14px', cursor: 'default' }}>
+                            <span title="已通过 (Accepted)" style={{ display: 'inline-flex', fontSize: '14px', cursor: 'default', flexShrink: 0 }}>
                               ✅
                             </span>
                           )}
                           {p.solved_status === 'FAILED' && (
-                            <span title="尝试过未通过 (Attempted)" style={{ display: 'inline-flex', fontSize: '14px', cursor: 'default' }}>
+                            <span title="尝试过未通过 (Attempted)" style={{ display: 'inline-flex', fontSize: '14px', cursor: 'default', flexShrink: 0 }}>
                               ❌
                             </span>
                           )}
-                          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13.5px', color: 'var(--primary)' }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13.5px', color: 'var(--primary)', flexShrink: 0, whiteSpace: 'nowrap' }}>
                             {p.contest_id}{p.index}
                           </span>
                           {p.is_cached && (
@@ -497,9 +497,11 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                               fontSize: '11.5px',
                               fontWeight: 600,
                               marginLeft: '4px',
-                              cursor: 'default'
+                              cursor: 'default',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0
                             }} title="已离线缓存，可秒开阅读">
-                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }}></span>
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block', flexShrink: 0 }}></span>
                               已译
                             </span>
                           )}
