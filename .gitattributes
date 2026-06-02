@@ -1,0 +1,4 @@
+# Force Windows batch files to always be checked out with CRLF (carriage return + line feed) line endings.
+# This prevents cmd.exe parser crashes caused by LF line endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
