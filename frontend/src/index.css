@@ -1015,3 +1015,110 @@ input, button, select, textarea {
 .copy-ai-btn:active {
   transform: translateY(0);
 }
+
+/* Interactive Sample Highlight Hovering Styles */
+.interactive-pre {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px 0 !important; /* Vertically padded */
+  margin: 0;
+  overflow-x: auto;
+}
+
+.interactive-line-wrapper {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+}
+
+.interactive-gutter {
+  width: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  border-right: 1px solid transparent;
+  margin-right: 8px;
+}
+
+.tc-num-marker {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  background-color: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.interactive-content-line {
+  padding-left: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.interactive-content-line.first-line {
+  font-weight: 700;
+  color: var(--text-secondary);
+  border-bottom: 1px dashed var(--border-color);
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+
+.interactive-tc-block {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+  padding: 4px 0;
+}
+
+/* Alternating backgrounds for clear testcase grouping */
+.interactive-tc-block.even {
+  background-color: var(--bg-hover);
+}
+
+.interactive-tc-block.odd {
+  background-color: var(--bg-card);
+}
+
+/* Dark mode alternating backgrounds */
+[data-theme='dark'] .interactive-tc-block.even {
+  background-color: rgba(255, 255, 255, 0.025);
+}
+
+[data-theme='dark'] .interactive-tc-block.odd {
+  background-color: transparent;
+}
+
+.interactive-tc-block.hovered {
+  background-color: #fffbeb !important; /* Soft premium warm amber background for hover */
+  border-left: 3px solid #f59e0b; /* Left amber accent line */
+}
+
+/* Dark mode adjustment for hovered sample */
+[data-theme='dark'] .interactive-tc-block.hovered {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  border-left: 3px solid #f59e0b;
+}
+
+.interactive-tc-block.hovered .interactive-gutter {
+  border-right: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.interactive-content-block {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+

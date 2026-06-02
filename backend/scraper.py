@@ -170,10 +170,10 @@ def scrape_cf_problem(contest_id: int, index: str) -> dict:
                 pre_in = inp.find("pre") or inp
                 pre_out = outp.find("pre") or outp
                 
-                # Extract text preserving linebreaks
-                def extract_pre_text(pre_elem):
+                # Extract text and structured lines preserving alternating class names
+                def extract_pre_info(pre_elem):
                     if not pre_elem:
-                        return ""
+                        return "", []
                     # Handle <br/> to actual newlines
                     for br in pre_elem.find_all("br"):
                         try:
@@ -188,26 +188,44 @@ def scrape_cf_problem(contest_id: int, index: str) -> dict:
                         # Extract title text length to slice off
                         title_len = len(title_div.text)
                     
-                    # Some inputs are split into divs. Let's merge them with newlines if needed
+                    # Some inputs/outputs are split into divs by Codeforces
                     nested_divs = pre_elem.find_all("div", class_="test-example-line")
                     if nested_divs:
+                        lines_data = []
+                        for d in nested_divs:
+                            cls_list = d.get("class", [])
+                            line_class = "none"
+                            if "test-example-line-even" in cls_list:
+                                line_class = "even"
+                            elif "test-example-line-odd" in cls_list:
+                                line_class = "odd"
+                            lines_data.append({
+                                "text": d.text,
+                                "class": line_class
+                            })
                         nested_text = "\n".join([d.text for d in nested_divs])
-                        return nested_text
+                        return nested_text, lines_data
                     
                     raw_text = pre_elem.text
                     if title_len > 0 and raw_text.strip().startswith(title_div.text.strip()):
                         # Safely slice off the header title text
                         start_idx = raw_text.find(title_div.text) + title_len
-                        return raw_text[start_idx:].strip()
+                        raw_text = raw_text[start_idx:].strip()
+                    else:
+                        raw_text = raw_text.strip()
                         
-                    return raw_text.strip()
+                    # Split raw text by newlines and assign none class
+                    lines_data = [{"text": line, "class": "none"} for line in raw_text.split("\n")]
+                    return raw_text, lines_data
                     
-                input_text = extract_pre_text(pre_in)
-                output_text = extract_pre_text(pre_out)
+                input_text, input_lines = extract_pre_info(pre_in)
+                output_text, output_lines = extract_pre_info(pre_out)
                 
                 samples.append({
                     "input": input_text,
-                    "output": output_text
+                    "output": output_text,
+                    "input_lines": input_lines,
+                    "output_lines": output_lines
                 })
                 
     # 6. Parse Note

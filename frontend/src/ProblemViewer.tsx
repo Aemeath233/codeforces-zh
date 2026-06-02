@@ -2,9 +2,16 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { RefreshCw, BookOpen, Layers, Languages, Copy, Check, Clock, Cpu, FileText, Send, AlertTriangle } from 'lucide-react';
 import { API_BASE } from './api';
 
+interface SampleLine {
+  text: string;
+  class: 'even' | 'odd' | 'none';
+}
+
 interface Sample {
   input: string;
   output: string;
+  input_lines?: SampleLine[];
+  output_lines?: SampleLine[];
 }
 
 export interface ProblemData {
@@ -75,6 +82,236 @@ const SampleCopyButton: React.FC<SampleCopyButtonProps> = ({ text, type, onShowT
         </>
       )}
     </button>
+  );
+};
+
+interface InteractiveSampleProps {
+  input: string;
+  output: string;
+  inputLinesData?: SampleLine[];
+  outputLinesData?: SampleLine[];
+  onShowToast: (message: string, type: 'success' | 'error') => void;
+}
+
+interface Block {
+  lines: string[];
+  class: 'even' | 'odd' | 'none';
+}
+
+const InteractiveSample: React.FC<InteractiveSampleProps> = ({
+  input,
+  output,
+  inputLinesData,
+  outputLinesData,
+  onShowToast
+}) => {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  const parseLines = (text: string) => {
+    return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter((l, i, arr) => {
+      if (i === arr.length - 1 && l.trim() === '') return false;
+      return true;
+    });
+  };
+
+  const groupLines = (lines: SampleLine[]): Block[] => {
+    if (lines.length === 0) return [];
+    const blocks: Block[] = [];
+    let currentBlock: Block = {
+      lines: [lines[0].text],
+      class: lines[0].class
+    };
+    
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.class === currentBlock.class && line.class !== 'none') {
+        currentBlock.lines.push(line.text);
+      } else {
+        blocks.push(currentBlock);
+        currentBlock = {
+          lines: [line.text],
+          class: line.class
+        };
+      }
+    }
+    blocks.push(currentBlock);
+    return blocks;
+  };
+
+  const hasStructuredLines =
+    inputLinesData &&
+    outputLinesData &&
+    inputLinesData.length > 0 &&
+    outputLinesData.length > 0;
+
+  let isMatched = false;
+  let tLine: string | null = null;
+  let inputBlocks: Block[] = [];
+  let outputBlocks: Block[] = [];
+
+  if (hasStructuredLines) {
+    const tRaw = inputLinesData[0]?.text.trim() || '';
+    const t = /^\d+$/.test(tRaw) ? parseInt(tRaw, 10) : NaN;
+
+    if (!isNaN(t) && t > 0 && inputLinesData.length > 1) {
+      tLine = inputLinesData[0].text;
+      const remainingInputLines = inputLinesData.slice(1);
+      const groupedInput = groupLines(remainingInputLines);
+      const groupedOutput = groupLines(outputLinesData);
+
+      if (groupedInput.length === t && groupedOutput.length === t) {
+        inputBlocks = groupedInput;
+        outputBlocks = groupedOutput;
+        isMatched = true;
+      }
+    } else {
+      const groupedInput = groupLines(inputLinesData);
+      const groupedOutput = groupLines(outputLinesData);
+
+      if (groupedInput.length === groupedOutput.length && groupedInput.length > 0) {
+        inputBlocks = groupedInput;
+        outputBlocks = groupedOutput;
+        isMatched = true;
+      }
+    }
+  }
+
+  // Fallback to older division logic if structured data is absent or unmatched
+  if (!isMatched) {
+    const inputLines = parseLines(input);
+    const outputLines = parseLines(output);
+    const tRaw = inputLines[0]?.trim();
+    const t = /^\d+$/.test(tRaw) ? parseInt(tRaw, 10) : NaN;
+
+    if (!isNaN(t) && t > 0 && inputLines.length > 1) {
+      const remainingInputLines = inputLines.length - 1;
+      if (remainingInputLines % t === 0 && outputLines.length % t === 0) {
+        const kIn = remainingInputLines / t;
+        const kOut = outputLines.length / t;
+        
+        tLine = inputLines[0];
+        inputBlocks = Array.from({ length: t }).map((_, tcIdx) => {
+          const startLine = 1 + tcIdx * kIn;
+          return {
+            lines: inputLines.slice(startLine, startLine + kIn),
+            class: tcIdx % 2 === 0 ? 'odd' : 'even'
+          };
+        });
+        outputBlocks = Array.from({ length: t }).map((_, tcIdx) => {
+          const startLine = tcIdx * kOut;
+          return {
+            lines: outputLines.slice(startLine, startLine + kOut),
+            class: tcIdx % 2 === 0 ? 'odd' : 'even'
+          };
+        });
+        isMatched = true;
+      }
+    }
+  }
+
+  if (!isMatched) {
+    return (
+      <div className="sample-grid">
+        <div className="sample-input-cell">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="sample-cell-title">输入 (Input)</div>
+            <SampleCopyButton text={input} type="input" onShowToast={onShowToast} />
+          </div>
+          <pre className="sample-pre">{input}</pre>
+        </div>
+        <div className="sample-output-cell">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="sample-cell-title">输出 (Output)</div>
+            <SampleCopyButton text={output} type="output" onShowToast={onShowToast} />
+          </div>
+          <pre className="sample-pre">{output}</pre>
+        </div>
+      </div>
+    );
+  }
+
+  const renderInputBlock = () => {
+    return (
+      <div className="interactive-pre">
+        {/* Render t on the first line */}
+        {tLine !== null && (
+          <div className="interactive-line-wrapper">
+            <div className="interactive-gutter"></div>
+            <div className="interactive-content-line first-line">{tLine}</div>
+          </div>
+        )}
+        {/* Render test cases */}
+        {inputBlocks.map((block, tcIdx) => {
+          const isHovered = hoveredIdx === tcIdx;
+          
+          return (
+            <div
+              key={tcIdx}
+              className={`interactive-tc-block ${block.class} ${isHovered ? 'hovered' : ''}`}
+              onMouseEnter={() => setHoveredIdx(tcIdx)}
+              onMouseLeave={() => setHoveredIdx(null)}
+            >
+              <div className="interactive-gutter">
+                {isHovered ? <span className="tc-num-marker">{tcIdx + 1}</span> : null}
+              </div>
+              <div className="interactive-content-block">
+                {block.lines.map((line, lIdx) => (
+                  <div key={lIdx} className="interactive-content-line">{line || ' '}</div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderOutputBlock = () => {
+    return (
+      <div className="interactive-pre">
+        {/* Render test cases */}
+        {outputBlocks.map((block, tcIdx) => {
+          const isHovered = hoveredIdx === tcIdx;
+          
+          return (
+            <div
+              key={tcIdx}
+              className={`interactive-tc-block ${block.class} ${isHovered ? 'hovered' : ''}`}
+              onMouseEnter={() => setHoveredIdx(tcIdx)}
+              onMouseLeave={() => setHoveredIdx(null)}
+            >
+              <div className="interactive-gutter">
+                {isHovered ? <span className="tc-num-marker">{tcIdx + 1}</span> : null}
+              </div>
+              <div className="interactive-content-block">
+                {block.lines.map((line, lIdx) => (
+                  <div key={lIdx} className="interactive-content-line">{line || ' '}</div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div className="sample-grid">
+      <div className="sample-input-cell">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="sample-cell-title">输入 (Input)</div>
+          <SampleCopyButton text={input} type="input" onShowToast={onShowToast} />
+        </div>
+        {renderInputBlock()}
+      </div>
+      <div className="sample-output-cell">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="sample-cell-title">输出 (Output)</div>
+          <SampleCopyButton text={output} type="output" onShowToast={onShowToast} />
+        </div>
+        {renderOutputBlock()}
+      </div>
+    </div>
   );
 };
 
@@ -427,33 +664,13 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
                     <span>样例 #{idx + 1}</span>
                   </div>
                   
-                  <div className="sample-grid">
-                    {/* Input cell */}
-                    <div className="sample-input-cell">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div className="sample-cell-title">输入 (Input)</div>
-                        <SampleCopyButton
-                          text={sample.input}
-                          type="input"
-                          onShowToast={onShowToast}
-                        />
-                      </div>
-                      <pre className="sample-pre">{sample.input}</pre>
-                    </div>
-
-                    {/* Output cell */}
-                    <div className="sample-output-cell">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div className="sample-cell-title">输出 (Output)</div>
-                        <SampleCopyButton
-                          text={sample.output}
-                          type="output"
-                          onShowToast={onShowToast}
-                        />
-                      </div>
-                      <pre className="sample-pre">{sample.output}</pre>
-                    </div>
-                  </div>
+                  <InteractiveSample
+                    input={sample.input}
+                    output={sample.output}
+                    inputLinesData={sample.input_lines}
+                    outputLinesData={sample.output_lines}
+                    onShowToast={onShowToast}
+                  />
                 </div>
               ))}
             </div>
