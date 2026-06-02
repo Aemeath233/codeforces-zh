@@ -41,6 +41,194 @@ const COMPILERS = [
   { id: '55', name: 'Node.js 20.11.1' },
 ];
 
+interface SampleCopyButtonProps {
+  text: string;
+  type: 'input' | 'output';
+  onShowToast: (message: string, type: 'success' | 'error') => void;
+}
+
+const SampleCopyButton: React.FC<SampleCopyButtonProps> = ({ text, type, onShowToast }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    onShowToast(`已复制样例${type === 'input' ? '输入' : '输出'}到剪贴板！`, 'success');
+    setTimeout(() => {
+      setCopied(false);
+    }, 2000);
+  };
+
+  return (
+    <button className="sample-copy-btn" onClick={handleCopy}>
+      {copied ? (
+        <>
+          <Check size={12} />
+          <span>已复制</span>
+        </>
+      ) : (
+        <>
+          <Copy size={12} />
+          <span>{type === 'input' ? '复制输入' : '复制输出'}</span>
+        </>
+      )}
+    </button>
+  );
+};
+
+interface AICopyButtonProps {
+  problemData: ProblemData;
+  hasNote: boolean;
+  lang: 'zh' | 'en';
+  viewMode: 'bilingual' | 'chinese' | 'english';
+  onShowToast: (message: string, type: 'success' | 'error') => void;
+}
+
+const AICopyButton: React.FC<AICopyButtonProps> = ({ problemData, hasNote, lang, viewMode, onShowToast }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const cleanHtmlToText = (html: string) => {
+      if (!html) return '';
+      let text = html;
+      text = text.replace(/<p[^>]*>/gi, '\n');
+      text = text.replace(/<\/p>/gi, '\n');
+      text = text.replace(/<br\s*\/?>/gi, '\n');
+      text = text.replace(/<li[^>]*>/gi, '\n* ');
+      text = text.replace(/<\/li>/gi, '');
+      text = text.replace(/<ul[^>]*>/gi, '');
+      text = text.replace(/<\/ul>/gi, '\n');
+      text = text.replace(/<pre[^>]*><code[^>]*>/gi, '\n```\n');
+      text = text.replace(/<\/code><\/pre>/gi, '\n```\n');
+      text = text.replace(/<code[^>]*>/gi, '`');
+      text = text.replace(/<\/code>/gi, '`');
+      text = text.replace(/<[^>]+>/g, '');
+      
+      const entities: { [key: string]: string } = {
+        '&quot;': '"',
+        '&amp;': '&',
+        '&lt;': '<',
+        '&gt;': '>',
+        '&nbsp;': ' ',
+        '&apos;': "'",
+        '&middot;': '·',
+        '&ldquo;': '“',
+        '&rdquo;': '”',
+        '&hellip;': '…'
+      };
+      text = text.replace(/&[a-z0-9#]+;/gi, (match) => entities[match] || match);
+      
+      return text.split('\n').map(line => line.trim()).filter((line, i, arr) => line !== '' || arr[i-1] !== '').join('\n');
+    };
+
+    if (lang === 'zh') {
+      const title = problemData.translated.title || problemData.title;
+      let cleanDescHtml = problemData.translated.description_html || '';
+      cleanDescHtml = cleanDescHtml.replace(/^<div style=['"]background:\s*#(eff6ff|fee2e2|fef08a)[^>]*>([\s\S]*?)<\/div>/i, '');
+      cleanDescHtml = cleanDescHtml.replace(/^<div style=['"][^'"]*['"]>\s*.*?(?:智能加速翻译|系统提示|多API回退告警|智能翻译节点).*?<\/div>/i, '');
+      
+      const desc = cleanHtmlToText(cleanDescHtml);
+      const inputSpec = cleanHtmlToText(problemData.translated.input_spec_html);
+      const outputSpec = cleanHtmlToText(problemData.translated.output_spec_html);
+      const note = cleanHtmlToText(problemData.translated.note_html || problemData.note_html);
+
+      let fullMarkdown = `# 题目: ${title}\n`;
+      fullMarkdown += `**时间限制**: ${problemData.time_limit} | **内存限制**: ${problemData.memory_limit}\n\n`;
+      fullMarkdown += `## 题目描述\n${desc}\n\n`;
+      
+      if (inputSpec) {
+        fullMarkdown += `## 输入格式说明\n${inputSpec}\n\n`;
+      }
+      if (outputSpec) {
+        fullMarkdown += `## 输出格式说明\n${outputSpec}\n\n`;
+      }
+      if (note && hasNote) {
+        fullMarkdown += `## 提示与说明\n${note}\n\n`;
+      }
+      
+      if (problemData.samples && problemData.samples.length > 0) {
+        fullMarkdown += `## 评测样例数据 (Examples)\n`;
+        problemData.samples.forEach((sample, idx) => {
+          fullMarkdown += `### 样例 #${idx + 1}\n`;
+          fullMarkdown += `**输入 (INPUT)**:\n\`\`\`\n${sample.input}\n\`\`\`\n`;
+          fullMarkdown += `**输出 (OUTPUT)**:\n\`\`\`\n${sample.output}\n\`\`\`\n\n`;
+        });
+      }
+
+      navigator.clipboard.writeText(fullMarkdown.trim());
+      setCopied(true);
+      onShowToast('中文题面（含格式化 Markdown）已一键复制到剪贴板！', 'success');
+    } else {
+      const title = problemData.title;
+      const desc = cleanHtmlToText(problemData.description_html);
+      const inputSpec = cleanHtmlToText(problemData.input_spec_html);
+      const outputSpec = cleanHtmlToText(problemData.output_spec_html);
+      const note = cleanHtmlToText(problemData.note_html);
+
+      let fullMarkdown = `# Problem: ${title}\n`;
+      fullMarkdown += `**Time Limit**: ${problemData.time_limit} | **Memory Limit**: ${problemData.memory_limit}\n\n`;
+      fullMarkdown += `## Description\n${desc}\n\n`;
+      
+      if (inputSpec) {
+        fullMarkdown += `## Input\n${inputSpec}\n\n`;
+      }
+      if (outputSpec) {
+        fullMarkdown += `## Output\n${outputSpec}\n\n`;
+      }
+      if (note && hasNote) {
+        fullMarkdown += `## Note\n${note}\n\n`;
+      }
+      
+      if (problemData.samples && problemData.samples.length > 0) {
+        fullMarkdown += `## Examples\n`;
+        problemData.samples.forEach((sample, idx) => {
+          fullMarkdown += `### Example #${idx + 1}\n`;
+          fullMarkdown += `**Input**:\n\`\`\`\n${sample.input}\n\`\`\`\n`;
+          fullMarkdown += `**Output**:\n\`\`\`\n${sample.output}\n\`\`\`\n\n`;
+        });
+      }
+
+      navigator.clipboard.writeText(fullMarkdown.trim());
+      setCopied(true);
+      onShowToast('Original English problem (formatted Markdown) copied!', 'success');
+    }
+    
+    setTimeout(() => {
+      setCopied(false);
+    }, 2000);
+  };
+
+  const topOffset = viewMode === 'bilingual' ? '12px' : '20px';
+
+  return (
+    <button
+      onClick={handleCopy}
+      style={{
+        position: 'absolute',
+        top: topOffset,
+        right: '20px',
+        zIndex: 10
+      }}
+      className="copy-ai-btn"
+      title={lang === 'zh' ? '一键复制完整中文题面及样例数据' : 'Copy complete English problem statement and sample data'}
+    >
+      {copied ? (
+        <>
+          <Check size={13} />
+          <span>{lang === 'zh' ? '已复制' : 'Copied'}</span>
+        </>
+      ) : (
+        <>
+          <Copy size={13} />
+          <span>{lang === 'zh' ? '一键复制问AI' : 'Copy for AI'}</span>
+        </>
+      )}
+    </button>
+  );
+};
+
 interface ProblemContentProps {
   problemData: ProblemData;
   viewMode: 'bilingual' | 'chinese' | 'english';
@@ -50,170 +238,7 @@ interface ProblemContentProps {
 
 const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast }: ProblemContentProps) => {
   const contentRef = useRef<HTMLDivElement>(null);
-  const [copiedIndex, setCopiedIndex] = useState<{ [key: number]: 'input' | 'output' | null }>({});
-  const [copiedChinese, setCopiedChinese] = useState(false);
-  const [copiedEnglish, setCopiedEnglish] = useState(false);
 
-  const handleCopyToClipboard = (text: string, index: number, type: 'input' | 'output') => {
-    navigator.clipboard.writeText(text);
-    setCopiedIndex((prev) => ({ ...prev, [index]: type }));
-    onShowToast(`已复制样例${type === 'input' ? '输入' : '输出'}到剪贴板！`, 'success');
-    
-    // Reset copy state after 2 seconds
-    setTimeout(() => {
-      setCopiedIndex((prev) => ({ ...prev, [index]: null }));
-    }, 2000);
-  };
-
-  const handleCopyFullChinese = () => {
-    const cleanHtmlToText = (html: string) => {
-      if (!html) return '';
-      let text = html;
-      text = text.replace(/<p[^>]*>/gi, '\n');
-      text = text.replace(/<\/p>/gi, '\n');
-      text = text.replace(/<br\s*\/?>/gi, '\n');
-      text = text.replace(/<li[^>]*>/gi, '\n* ');
-      text = text.replace(/<\/li>/gi, '');
-      text = text.replace(/<ul[^>]*>/gi, '');
-      text = text.replace(/<\/ul>/gi, '\n');
-      text = text.replace(/<pre[^>]*><code[^>]*>/gi, '\n```\n');
-      text = text.replace(/<\/code><\/pre>/gi, '\n```\n');
-      text = text.replace(/<code[^>]*>/gi, '`');
-      text = text.replace(/<\/code>/gi, '`');
-      text = text.replace(/<[^>]+>/g, '');
-      
-      const entities: { [key: string]: string } = {
-        '&quot;': '"',
-        '&amp;': '&',
-        '&lt;': '<',
-        '&gt;': '>',
-        '&nbsp;': ' ',
-        '&apos;': "'",
-        '&middot;': '·',
-        '&ldquo;': '“',
-        '&rdquo;': '”',
-        '&hellip;': '…'
-      };
-      text = text.replace(/&[a-z0-9#]+;/gi, (match) => entities[match] || match);
-      
-      return text.split('\n').map(line => line.trim()).filter((line, i, arr) => line !== '' || arr[i-1] !== '').join('\n');
-    };
-
-    const title = problemData.translated.title || problemData.title;
-    
-    // Strip any translation metadata banner or errors pre-pended to the translated description
-    let cleanDescHtml = problemData.translated.description_html || '';
-    cleanDescHtml = cleanDescHtml.replace(/^<div style=['"]background:\s*#(eff6ff|fee2e2|fef08a)[^>]*>([\s\S]*?)<\/div>/i, '');
-    cleanDescHtml = cleanDescHtml.replace(/^<div style=['"][^'"]*['"]>\s*.*?(?:智能加速翻译|系统提示|多API回退告警|智能翻译节点).*?<\/div>/i, '');
-    
-    const desc = cleanHtmlToText(cleanDescHtml);
-    const inputSpec = cleanHtmlToText(problemData.translated.input_spec_html);
-    const outputSpec = cleanHtmlToText(problemData.translated.output_spec_html);
-    const note = cleanHtmlToText(problemData.translated.note_html || problemData.note_html);
-
-    let fullMarkdown = `# 题目: ${title}\n`;
-    fullMarkdown += `**时限**: ${problemData.time_limit} | **内存限制**: ${problemData.memory_limit}\n\n`;
-    fullMarkdown += `## 题目描述\n${desc}\n\n`;
-    
-    if (inputSpec) {
-      fullMarkdown += `## 输入格式\n${inputSpec}\n\n`;
-    }
-    if (outputSpec) {
-      fullMarkdown += `## 输出格式\n${outputSpec}\n\n`;
-    }
-    if (note && hasNote) {
-      fullMarkdown += `## 提示说明\n${note}\n\n`;
-    }
-    
-    if (problemData.samples && problemData.samples.length > 0) {
-      fullMarkdown += `## 样例数据\n`;
-      problemData.samples.forEach((sample, idx) => {
-        fullMarkdown += `### 样例 #${idx + 1}\n`;
-        fullMarkdown += `**输入**:\n\`\`\`\n${sample.input}\n\`\`\`\n`;
-        fullMarkdown += `**输出**:\n\`\`\`\n${sample.output}\n\`\`\`\n\n`;
-      });
-    }
-
-    navigator.clipboard.writeText(fullMarkdown.trim());
-    setCopiedChinese(true);
-    onShowToast('中文题面（含格式化 Markdown）已一键复制到剪贴板！', 'success');
-    
-    setTimeout(() => {
-      setCopiedChinese(false);
-    }, 2000);
-  };
-
-  const handleCopyFullEnglish = () => {
-    const cleanHtmlToText = (html: string) => {
-      if (!html) return '';
-      let text = html;
-      text = text.replace(/<p[^>]*>/gi, '\n');
-      text = text.replace(/<\/p>/gi, '\n');
-      text = text.replace(/<br\s*\/?>/gi, '\n');
-      text = text.replace(/<li[^>]*>/gi, '\n* ');
-      text = text.replace(/<\/li>/gi, '');
-      text = text.replace(/<ul[^>]*>/gi, '');
-      text = text.replace(/<\/ul>/gi, '\n');
-      text = text.replace(/<pre[^>]*><code[^>]*>/gi, '\n```\n');
-      text = text.replace(/<\/code><\/pre>/gi, '\n```\n');
-      text = text.replace(/<code[^>]*>/gi, '`');
-      text = text.replace(/<\/code>/gi, '`');
-      text = text.replace(/<[^>]+>/g, '');
-      
-      const entities: { [key: string]: string } = {
-        '&quot;': '"',
-        '&amp;': '&',
-        '&lt;': '<',
-        '&gt;': '>',
-        '&nbsp;': ' ',
-        '&apos;': "'",
-        '&middot;': '·',
-        '&ldquo;': '“',
-        '&rdquo;': '”',
-        '&hellip;': '…'
-      };
-      text = text.replace(/&[a-z0-9#]+;/gi, (match) => entities[match] || match);
-      
-      return text.split('\n').map(line => line.trim()).filter((line, i, arr) => line !== '' || arr[i-1] !== '').join('\n');
-    };
-
-    const title = problemData.title;
-    const desc = cleanHtmlToText(problemData.description_html);
-    const inputSpec = cleanHtmlToText(problemData.input_spec_html);
-    const outputSpec = cleanHtmlToText(problemData.output_spec_html);
-    const note = cleanHtmlToText(problemData.note_html);
-
-    let fullMarkdown = `# Problem: ${title}\n`;
-    fullMarkdown += `**Time Limit**: ${problemData.time_limit} | **Memory Limit**: ${problemData.memory_limit}\n\n`;
-    fullMarkdown += `## Description\n${desc}\n\n`;
-    
-    if (inputSpec) {
-      fullMarkdown += `## Input\n${inputSpec}\n\n`;
-    }
-    if (outputSpec) {
-      fullMarkdown += `## Output\n${outputSpec}\n\n`;
-    }
-    if (note && hasNote) {
-      fullMarkdown += `## Note\n${note}\n\n`;
-    }
-    
-    if (problemData.samples && problemData.samples.length > 0) {
-      fullMarkdown += `## Examples\n`;
-      problemData.samples.forEach((sample, idx) => {
-        fullMarkdown += `### Example #${idx + 1}\n`;
-        fullMarkdown += `**Input**:\n\`\`\`\n${sample.input}\n\`\`\`\n`;
-        fullMarkdown += `**Output**:\n\`\`\`\n${sample.output}\n\`\`\`\n\n`;
-      });
-    }
-
-    navigator.clipboard.writeText(fullMarkdown.trim());
-    setCopiedEnglish(true);
-    onShowToast('Original English problem (formatted Markdown) copied!', 'success');
-    
-    setTimeout(() => {
-      setCopiedEnglish(false);
-    }, 2000);
-  };
 
   // Re-run MathJax rendering whenever problemData or viewMode changes
   useEffect(() => {
@@ -280,29 +305,13 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
           <div className="reader-column" style={{ position: 'relative' }}>
             {viewMode === 'bilingual' && <div className="column-header-tab">中文智能翻译</div>}
             
-            <button
-              onClick={handleCopyFullChinese}
-              style={{
-                position: 'absolute',
-                top: viewMode === 'bilingual' ? '12px' : '20px',
-                right: '20px',
-                zIndex: 10
-              }}
-              className="copy-ai-btn"
-              title="一键复制完整中文题面及样例数据"
-            >
-              {copiedChinese ? (
-                <>
-                  <Check size={13} />
-                  <span>已复制</span>
-                </>
-              ) : (
-                <>
-                  <Copy size={13} />
-                  <span>一键复制问AI</span>
-                </>
-              )}
-            </button>
+            <AICopyButton
+              problemData={problemData}
+              hasNote={hasNote}
+              lang="zh"
+              viewMode={viewMode}
+              onShowToast={onShowToast}
+            />
             
             {/* Title */}
             <div className="problem-html">
@@ -347,29 +356,13 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
           <div className="reader-column" style={{ position: 'relative' }}>
             {viewMode === 'bilingual' && <div className="column-header-tab en">Original English</div>}
             
-            <button
-              onClick={handleCopyFullEnglish}
-              style={{
-                position: 'absolute',
-                top: viewMode === 'bilingual' ? '12px' : '20px',
-                right: '20px',
-                zIndex: 10
-              }}
-              className="copy-ai-btn"
-              title="Copy complete English problem statement and sample data"
-            >
-              {copiedEnglish ? (
-                <>
-                  <Check size={13} />
-                  <span>Copied</span>
-                </>
-              ) : (
-                <>
-                  <Copy size={13} />
-                  <span>Copy for AI</span>
-                </>
-              )}
-            </button>
+            <AICopyButton
+              problemData={problemData}
+              hasNote={hasNote}
+              lang="en"
+              viewMode={viewMode}
+              onShowToast={onShowToast}
+            />
             
             <div className="problem-html">
               <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '16px', color: 'var(--text-primary)' }}>
@@ -426,22 +419,11 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
                     <div className="sample-input-cell">
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div className="sample-cell-title">输入 (Input)</div>
-                        <button
-                          className="sample-copy-btn"
-                          onClick={() => handleCopyToClipboard(sample.input, idx, 'input')}
-                        >
-                          {copiedIndex[idx] === 'input' ? (
-                            <>
-                              <Check size={12} />
-                              已复制
-                            </>
-                          ) : (
-                            <>
-                              <Copy size={12} />
-                              复制输入
-                            </>
-                          )}
-                        </button>
+                        <SampleCopyButton
+                          text={sample.input}
+                          type="input"
+                          onShowToast={onShowToast}
+                        />
                       </div>
                       <pre className="sample-pre">{sample.input}</pre>
                     </div>
@@ -450,22 +432,11 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
                     <div className="sample-output-cell">
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div className="sample-cell-title">输出 (Output)</div>
-                        <button
-                          className="sample-copy-btn"
-                          onClick={() => handleCopyToClipboard(sample.output, idx, 'output')}
-                        >
-                          {copiedIndex[idx] === 'output' ? (
-                            <>
-                              <Check size={12} />
-                              已复制
-                            </>
-                          ) : (
-                            <>
-                              <Copy size={12} />
-                              复制输出
-                            </>
-                          )}
-                        </button>
+                        <SampleCopyButton
+                          text={sample.output}
+                          type="output"
+                          onShowToast={onShowToast}
+                        />
                       </div>
                       <pre className="sample-pre">{sample.output}</pre>
                     </div>
