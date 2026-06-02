@@ -1,3 +1,4 @@
+import os
 import datetime
 import json
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, Index, text
@@ -5,7 +6,13 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 Base = declarative_base()
-DATABASE_URL = "sqlite:///d:/Code/CF/backend/cf_mirror.db"
+
+# Resolve SQLite database file dynamically relative to this script's directory (CF/backend/)
+# to ensure the project is fully portable and works out-of-the-box when cloned anywhere.
+backend_dir = os.path.abspath(os.path.dirname(__file__))
+db_path = os.path.join(backend_dir, "cf_mirror.db")
+DATABASE_URL = f"sqlite:///{db_path.replace('\\', '/')}"
+
 
 class SystemConfig(Base):
     __tablename__ = "system_config"
