@@ -297,6 +297,51 @@ export const App: React.FC = () => {
         </ul>
 
         <div className="navbar-right">
+          {batchQueue.isActive && (
+            <div 
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: 'var(--primary-light, rgba(59, 130, 246, 0.08))',
+                color: 'var(--primary)',
+                padding: '5px 12px',
+                borderRadius: '20px',
+                border: '1px solid rgba(59, 130, 246, 0.15)',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                cursor: 'default'
+              }}
+              title={batchQueue.statusText}
+            >
+              <div className="spinner" style={{ width: '12px', height: '12px', borderWidth: '2px', borderTopColor: 'var(--primary)', animationDuration: '0.8s', flexShrink: 0 }}></div>
+              <span style={{ whiteSpace: 'nowrap' }}>预热进度: {batchQueue.currentIndex}/{batchQueue.total}</span>
+              {batchQueue.timerCountdown > 0 && (
+                <span style={{ fontSize: '11.5px', opacity: 0.8, color: '#3b82f6', fontWeight: 700, whiteSpace: 'nowrap' }}>⏱️ {batchQueue.timerCountdown}s</span>
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); handleCancelBatchTranslation(); }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  marginLeft: '6px',
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  flexShrink: 0
+                }}
+                title="取消任务"
+              >
+                取消
+              </button>
+            </div>
+          )}
           <div className="status-indicator">
             <span className="status-dot"></span>
             <span>本地镜像站已激活</span>
@@ -366,91 +411,7 @@ export const App: React.FC = () => {
         ))}
       </div>
 
-      {/* 4. Global Floating Batch Queue Progress Widget */}
-      {batchQueue.isActive && (
-        <div style={{
-          position: 'fixed',
-          bottom: '24px',
-          left: '24px',
-          zIndex: 999,
-          width: '360px',
-          padding: '18px',
-          backgroundColor: 'rgba(255, 255, 255, 0.85)',
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
-          border: '1px solid rgba(0, 0, 0, 0.08)',
-          borderRadius: '16px',
-          boxShadow: '0 20px 40px -15px rgba(0,0,0,0.15), 0 0 1px 0 rgba(0,0,0,0.1) inset',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-          animation: 'scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2.5px', borderTopColor: 'var(--primary)' }}></div>
-              <span style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--primary)' }}>
-                批量预热翻译中 ({batchQueue.currentIndex}/{batchQueue.total})
-              </span>
-            </div>
-            <button
-              onClick={handleCancelBatchTranslation}
-              className="btn-secondary"
-              style={{
-                padding: '4px 10px',
-                fontSize: '12px',
-                color: 'var(--danger)',
-                borderColor: 'rgba(239, 68, 68, 0.2)',
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                fontWeight: 600,
-                borderRadius: '8px',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              取消任务
-            </button>
-          </div>
 
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4, wordBreak: 'break-all' }}>
-            {batchQueue.statusText}
-          </div>
-
-          {/* Progress Bar */}
-          <div style={{
-            width: '100%',
-            height: '6px',
-            backgroundColor: 'rgba(0, 0, 0, 0.06)',
-            borderRadius: '3px',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              width: `${(batchQueue.currentIndex / batchQueue.total) * 100}%`,
-              height: '100%',
-              backgroundColor: 'var(--primary)',
-              backgroundImage: 'linear-gradient(90deg, var(--primary) 0%, #4f46e5 100%)',
-              transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
-            }}></div>
-          </div>
-
-          {batchQueue.timerCountdown > 0 && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '12px',
-              color: 'var(--primary)',
-              fontWeight: 600,
-              backgroundColor: 'var(--primary-light)',
-              padding: '6px 10px',
-              borderRadius: '8px',
-              border: '1px solid rgba(59, 130, 246, 0.1)'
-            }}>
-              <span>⏱️ 安全冷却倒计时: <b style={{ fontSize: '13px' }}>{batchQueue.timerCountdown}</b> 秒下一题...</span>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };
