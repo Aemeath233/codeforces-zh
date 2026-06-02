@@ -6,7 +6,7 @@ echo     Codeforces AI Translation Mirror - One-Click Launcher
 echo =======================================================
 echo.
 
-:: 1. Check Python Environment
+rem 1. Check Python Environment
 python --version >nul 2>&1
 if %errorlevel% equ 0 (
     set PYTHON_CMD=python
@@ -50,7 +50,7 @@ exit /b 1
 :python_found
 echo [SUCCESS] Python environment detected: %PYTHON_CMD%
 
-:: 2. Check and Fix pip
+rem 2. Check and Fix pip
 %PYTHON_CMD% -m pip --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo [WARNING] pip not found. Attempting to install pip...
@@ -70,7 +70,7 @@ if %errorlevel% neq 0 (
     echo [SUCCESS] pip installed/repaired successfully!
 )
 
-:: 3. Check and Fix Node.js (npm is required for frontend)
+rem 3. Check and Fix Node.js (npm is required for frontend)
 npm -v >nul 2>&1
 if %errorlevel% neq 0 (
     echo [WARNING] Node.js/npm not found. Node.js is required for the frontend.
@@ -99,7 +99,7 @@ echo [SUCCESS] Node.js/npm environment is ready.
 echo [INFO] Launching startup controller start.py, please wait...
 echo.
 
-:: 4. Call main python script
+rem 4. Call main python script
 %PYTHON_CMD% start.py
 
 if %errorlevel% neq 0 (
