@@ -78,26 +78,38 @@ export const App: React.FC = () => {
         currentProblemId: p.id,
         statusText: `正在抓取并翻译第 ${i + 1}/${selectedProblems.length} 道题: ${p.contest_id}${p.index}...`
       }));
+      let isCached = p.is_cached || false;
 
-      let isCached = false;
-      try {
-        // Trigger scraping and translation on the backend by hitting the GET endpoint
-        const response = await fetch(`http://localhost:8000/api/problem/${p.contest_id}/${p.index}`);
-        if (!response.ok) {
-          throw new Error('翻译接口返回异常');
+      if (isCached) {
+        console.log(`Problem ${p.contest_id}${p.index} is already cached (precheck). Skipping translation and delay.`);
+        setBatchQueue(prev => ({
+          ...prev,
+          currentIndex: i + 1,
+          currentProblemId: p.id,
+          statusText: `已检测到本地缓存：自动跳过并加速下一题 ${p.contest_id}${p.index}...`
+        }));
+        // Small delay just to let the user see the progress bar/text animate smoothly (e.g. 150ms)
+        await new Promise(resolve => setTimeout(resolve, 150));
+      } else {
+        try {
+          // Trigger scraping and translation on the backend by hitting the GET endpoint
+          const response = await fetch(`http://localhost:8000/api/problem/${p.contest_id}/${p.index}`);
+          if (!response.ok) {
+            throw new Error('翻译接口返回异常');
+          }
+          
+          const data = await response.json();
+          // Check if the source is served from local cache
+          if (data.source === 'cache') {
+            isCached = true;
+            console.log(`Problem ${p.contest_id}${p.index} loaded from cache. Skipping delay.`);
+          }
+        } catch (err) {
+          console.error(`Batch translation failed for ${p.contest_id}${p.index}:`, err);
+          showToast(`题目 ${p.contest_id}${p.index} 预翻译失败，已跳过。`, 'error');
         }
-        
-        const data = await response.json();
-        // Check if the source is served from local cache
-        if (data.source === 'cache') {
-          isCached = true;
-          console.log(`Problem ${p.contest_id}${p.index} loaded from cache. Skipping delay.`);
-        }
-      } catch (err) {
-        console.error(`Batch translation failed for ${p.contest_id}${p.index}:`, err);
-        showToast(`题目 ${p.contest_id}${p.index} 预翻译失败，已跳过。`, 'error');
       }
-
+      
       // If there are more problems, start a 60-second countdown (only if it wasn't cached)
       if (i < selectedProblems.length - 1) {
         if (cancelBatchRef.current) break;
@@ -318,7 +330,6 @@ export const App: React.FC = () => {
             onShowToast={showToast} 
             batchQueue={batchQueue}
             onStartBatch={handleStartBatchTranslation}
-            onCancelBatch={handleCancelBatchTranslation}
           />
         )}
 
@@ -356,29 +367,29 @@ export const App: React.FC = () => {
       </div>
 
       {/* 4. Global Floating Batch Queue Progress Widget */}
-      {batchQueue.isActive && activeTab !== 'problemset' && (
+      {batchQueue.isActive && (
         <div style={{
           position: 'fixed',
           bottom: '24px',
           left: '24px',
-          zIndex: 99,
-          width: '320px',
-          padding: '16px',
+          zIndex: 999,
+          width: '360px',
+          padding: '18px',
           backgroundColor: 'rgba(255, 255, 255, 0.85)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid var(--border-color)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: '1px solid rgba(0, 0, 0, 0.08)',
           borderRadius: '16px',
-          boxShadow: 'var(--shadow-premium)',
+          boxShadow: '0 20px 40px -15px rgba(0,0,0,0.15), 0 0 1px 0 rgba(0,0,0,0.1) inset',
           display: 'flex',
           flexDirection: 'column',
-          gap: '10px',
+          gap: '12px',
           animation: 'scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <div className="spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></div>
-              <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--primary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2.5px', borderTopColor: 'var(--primary)' }}></div>
+              <span style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--primary)' }}>
                 批量预热翻译中 ({batchQueue.currentIndex}/{batchQueue.total})
               </span>
             </div>
@@ -386,41 +397,56 @@ export const App: React.FC = () => {
               onClick={handleCancelBatchTranslation}
               className="btn-secondary"
               style={{
-                padding: '2px 6px',
-                fontSize: '11px',
+                padding: '4px 10px',
+                fontSize: '12px',
                 color: 'var(--danger)',
-                borderColor: 'HSL(350, 89%, 90%)',
-                backgroundColor: 'white',
-                fontWeight: 600
+                borderColor: 'rgba(239, 68, 68, 0.2)',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                fontWeight: 600,
+                borderRadius: '8px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
               }}
             >
-              取消
+              取消任务
             </button>
           </div>
 
-          <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4, wordBreak: 'break-all' }}>
             {batchQueue.statusText}
           </div>
 
           {/* Progress Bar */}
           <div style={{
             width: '100%',
-            height: '4px',
-            backgroundColor: 'var(--border-color)',
-            borderRadius: '2px',
+            height: '6px',
+            backgroundColor: 'rgba(0, 0, 0, 0.06)',
+            borderRadius: '3px',
             overflow: 'hidden'
           }}>
             <div style={{
               width: `${(batchQueue.currentIndex / batchQueue.total) * 100}%`,
               height: '100%',
               backgroundColor: 'var(--primary)',
-              transition: 'width 0.4s ease'
+              backgroundImage: 'linear-gradient(90deg, var(--primary) 0%, #4f46e5 100%)',
+              transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
             }}></div>
           </div>
 
           {batchQueue.timerCountdown > 0 && (
-            <div style={{ fontSize: '11px', color: 'var(--primary)', fontWeight: 600 }}>
-              ⏱️ 安全冷却倒计时: {batchQueue.timerCountdown} 秒下一题...
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '12px',
+              color: 'var(--primary)',
+              fontWeight: 600,
+              backgroundColor: 'var(--primary-light)',
+              padding: '6px 10px',
+              borderRadius: '8px',
+              border: '1px solid rgba(59, 130, 246, 0.1)'
+            }}>
+              <span>⏱️ 安全冷却倒计时: <b style={{ fontSize: '13px' }}>{batchQueue.timerCountdown}</b> 秒下一题...</span>
             </div>
           )}
         </div>

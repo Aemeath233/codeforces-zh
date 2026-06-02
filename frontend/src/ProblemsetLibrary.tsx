@@ -10,6 +10,7 @@ interface Problem {
   solved_count: number;
   tags: string[];
   solved_status?: 'OK' | 'FAILED' | 'NONE';
+  is_cached?: boolean;
 }
 
 interface ProblemsetLibraryProps {
@@ -24,7 +25,6 @@ interface ProblemsetLibraryProps {
     timerCountdown: number;
   };
   onStartBatch: (selectedProblems: any[]) => Promise<void>;
-  onCancelBatch: () => void;
 }
 
 // Curated list of popular Codeforces tags for the selector
@@ -40,8 +40,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
   onSelectProblem, 
   onShowToast,
   batchQueue,
-  onStartBatch,
-  onCancelBatch
+  onStartBatch
 }) => {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [total, setTotal] = useState(0);
@@ -69,7 +68,26 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Checkbox selection states
-  const [selectedProblemIds, setSelectedProblemIds] = useState<string[]>([]);
+  const [selectedProblemIds, setSelectedProblemIds] = useState<string[]>(() => {
+    const val = localStorage.getItem('cf_lib_selected_ids');
+    try {
+      return val ? JSON.parse(val) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // Synchronize selection to localStorage
+  useEffect(() => {
+    localStorage.setItem('cf_lib_selected_ids', JSON.stringify(selectedProblemIds));
+  }, [selectedProblemIds]);
+
+  // Automatically clear selection when a batch translation starts
+  useEffect(() => {
+    if (batchQueue.isActive) {
+      setSelectedProblemIds([]);
+    }
+  }, [batchQueue.isActive]);
 
   // Synchronize states to localStorage whenever they change
   useEffect(() => {
@@ -317,76 +335,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
       {/* Grid Library List */}
       <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-premium)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
-        {/* Batch Control Panel */}
-        {batchQueue.isActive && (
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-            padding: '16px 20px',
-            backgroundColor: 'var(--primary-light)',
-            border: '1px solid HSL(221, 83%, 90%)',
-            borderRadius: '12px',
-            marginBottom: '4px',
-            animation: 'fadeIn 0.3s ease'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></div>
-                <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--primary)' }}>
-                  🤖 后台批量预热翻译进行中 ({batchQueue.currentIndex}/{batchQueue.total})
-                </span>
-              </div>
-              <button
-                onClick={onCancelBatch}
-                className="btn-secondary"
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '12px',
-                  color: 'var(--danger)',
-                  borderColor: 'HSL(350, 89%, 90%)',
-                  backgroundColor: 'white',
-                  fontWeight: 600
-                }}
-              >
-                取消任务
-              </button>
-            </div>
-            
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              {batchQueue.statusText}
-            </div>
-            
-            {/* Progress Bar */}
-            <div style={{
-              width: '100%',
-              height: '6px',
-              backgroundColor: 'var(--border-color)',
-              borderRadius: '3px',
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                width: `${(batchQueue.currentIndex / batchQueue.total) * 100}%`,
-                height: '100%',
-                backgroundColor: 'var(--primary)',
-                transition: 'width 0.4s ease'
-              }}></div>
-            </div>
 
-            {batchQueue.timerCountdown > 0 && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '12.5px',
-                color: 'var(--primary)',
-                fontWeight: 600
-              }}>
-                <span>⏱️ 为防止 Codeforces WAF 与大模型频限，正在安全冷却中：还剩 {batchQueue.timerCountdown} 秒下一题...</span>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Selected Control Bar */}
         {selectedProblemIds.length > 0 && !batchQueue.isActive && (
@@ -536,6 +485,24 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                           <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13.5px', color: 'var(--primary)' }}>
                             {p.contest_id}{p.index}
                           </span>
+                          {p.is_cached && (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                              color: '#10b981',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: '11.5px',
+                              fontWeight: 600,
+                              marginLeft: '4px',
+                              cursor: 'default'
+                            }} title="已离线缓存，可秒开阅读">
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }}></span>
+                              已译
+                            </span>
+                          )}
                         </div>
                       </td>
                       

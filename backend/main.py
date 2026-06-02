@@ -662,6 +662,12 @@ def get_problems(
     # Fetch user solved status map
     status_map = get_user_solved_status_map(db)
     
+    # Fetch cached status for these problems in a single optimized query
+    page_problem_ids = [p.id for p in problems_list]
+    cached_ids = set(
+        r[0] for r in db.query(CachedProblem.id).filter(CachedProblem.id.in_(page_problem_ids)).all()
+    )
+    
     problems_mapped = []
     for p in problems_list:
         problems_mapped.append({
@@ -672,7 +678,8 @@ def get_problems(
             "rating": p.rating,
             "solved_count": p.solved_count,
             "tags": json.loads(p.tags_json) if p.tags_json else [],
-            "solved_status": status_map.get(p.id, "NONE")
+            "solved_status": status_map.get(p.id, "NONE"),
+            "is_cached": p.id in cached_ids
         })
         
     return {
