@@ -97,6 +97,12 @@ def check_dependencies():
             import httpx
             import bs4
             import sqlalchemy
+            # Ensure sqlalchemy is >= 2.0.35 under Python 3.13+ to avoid AssertionError
+            import sys as pysys
+            if pysys.version_info >= (3, 13):
+                v_parts = [int(x) for x in sqlalchemy.__version__.split(".") if x.isdigit()]
+                if v_parts and (v_parts[0] < 2 or (v_parts[0] == 2 and v_parts[1] == 0 and len(v_parts) > 2 and v_parts[2] < 35)):
+                    raise Exception("sqlalchemy must be >= 2.0.35 under Python 3.13+")
             import openai
             import urllib3
             # Ensure urllib3 is < 2.0.0 on Windows to avoid protocol EOF handshake bugs
