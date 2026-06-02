@@ -10,10 +10,10 @@
 
 ```mermaid
 graph TD
-    A[Vite + React + TS 前端] -->|API 请求 / 提交代码| B[FastAPI 本地服务器]
-    B -->|1. 检查缓存 (5ms)| C[(SQLite 本地数据库)]
-    B -->|2. 抓取题面 (爬虫/容灾)| D[Codeforces 官网/镜像站]
-    B -->|3. 翻译引擎 (多路链式回退)| E[OpenAI / 各种大模型 API]
+    A["Vite + React + TS 前端"] -->|API 请求与提交代码| B["FastAPI 本地服务器"]
+    B -->|1. 检查缓存 - 5ms| C[("SQLite 本地数据库")]
+    B -->|2. 抓取题面 - 爬虫与容灾| D["Codeforces 官网/镜像站"]
+    B -->|3. 翻译引擎 - 多路链式回退| E["OpenAI / 各种大模型 API"]
     C -->|缓存命中| A
     D -->|解析 HTML 并缓存| C
     E -->|格式化中文并缓存| C
