@@ -229,18 +229,14 @@ const AICopyButton: React.FC<AICopyButtonProps> = ({ problemData, hasNote, lang,
   );
 };
 
-interface ProblemContentProps {
-  problemData: ProblemData;
-  viewMode: 'bilingual' | 'chinese' | 'english';
-  hasNote: boolean;
-  onShowToast: (message: string, type: 'success' | 'error') => void;
+interface MathJaxHtmlProps {
+  html: string;
+  className?: string;
 }
 
-const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast }: ProblemContentProps) => {
-  const contentRef = useRef<HTMLDivElement>(null);
+const MathJaxHtml: React.FC<MathJaxHtmlProps> = React.memo(({ html, className }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
 
-
-  // Re-run MathJax rendering whenever problemData or viewMode changes
   useEffect(() => {
     let isMounted = true;
     let pollCount = 0;
@@ -249,14 +245,14 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
 
     const runTypeset = () => {
       const mathJax = (window as any).MathJax;
-      if (mathJax && mathJax.typesetPromise && contentRef.current) {
+      if (mathJax && mathJax.typesetPromise && containerRef.current) {
         try {
-          mathJax.typesetClear([contentRef.current]);
+          mathJax.typesetClear([containerRef.current]);
         } catch (e) {
           console.warn('MathJax typesetClear warning:', e);
         }
 
-        mathJax.typesetPromise([contentRef.current]).catch((err: any) => {
+        mathJax.typesetPromise([containerRef.current]).catch((err: any) => {
           console.error('MathJax rendering error:', err);
         });
 
@@ -268,35 +264,46 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
       return false;
     };
 
-    const timer = setTimeout(() => {
-      if (!isMounted) return;
-      const success = runTypeset();
-      if (!success) {
-        pollInterval = setInterval(() => {
-          if (!isMounted) {
-            clearInterval(pollInterval);
-            return;
-          }
-          pollCount++;
-          const done = runTypeset();
-          if (done || pollCount >= maxPolls) {
-            clearInterval(pollInterval);
-          }
-        }, 50);
-      }
-    }, 50);
+    // Run immediately or start polling
+    const success = runTypeset();
+    if (!success) {
+      pollInterval = setInterval(() => {
+        if (!isMounted) {
+          clearInterval(pollInterval);
+          return;
+        }
+        pollCount++;
+        const done = runTypeset();
+        if (done || pollCount >= maxPolls) {
+          clearInterval(pollInterval);
+        }
+      }, 50);
+    }
 
     return () => {
       isMounted = false;
-      clearTimeout(timer);
       if (pollInterval) {
         clearInterval(pollInterval);
       }
     };
-  }, [problemData, viewMode]);
+  }, [html]);
 
+  return <div ref={containerRef} className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+}, (prevProps, nextProps) => {
+  return prevProps.html === nextProps.html;
+});
+
+
+interface ProblemContentProps {
+  problemData: ProblemData;
+  viewMode: 'bilingual' | 'chinese' | 'english';
+  hasNote: boolean;
+  onShowToast: (message: string, type: 'success' | 'error') => void;
+}
+
+const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast }: ProblemContentProps) => {
   return (
-    <div ref={contentRef} className="tex2jax_process" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div className="tex2jax_process" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* 2. Reader Body */}
       <div className={`problem-reader-split ${viewMode !== 'bilingual' ? 'single-column' : ''}`}>
         
@@ -320,15 +327,13 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
               </h2>
               
               {/* Description */}
-              <div 
-                dangerouslySetInnerHTML={{ __html: problemData.translated.description_html }} 
-              />
+              <MathJaxHtml html={problemData.translated.description_html} />
               
               {/* Input format */}
               {problemData.translated.input_spec_html && (
                 <>
                   <div className="section-subtitle">输入格式说明</div>
-                  <div dangerouslySetInnerHTML={{ __html: problemData.translated.input_spec_html }} />
+                  <MathJaxHtml html={problemData.translated.input_spec_html} />
                 </>
               )}
 
@@ -336,7 +341,7 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
               {problemData.translated.output_spec_html && (
                 <>
                   <div className="section-subtitle">输出格式说明</div>
-                  <div dangerouslySetInnerHTML={{ __html: problemData.translated.output_spec_html }} />
+                  <MathJaxHtml html={problemData.translated.output_spec_html} />
                 </>
               )}
 
@@ -344,7 +349,7 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
               {viewMode === 'chinese' && hasNote && (
                 <>
                   <div className="section-subtitle">提示与说明</div>
-                  <div dangerouslySetInnerHTML={{ __html: problemData.translated.note_html || problemData.note_html }} />
+                  <MathJaxHtml html={problemData.translated.note_html || problemData.note_html} />
                 </>
               )}
             </div>
@@ -369,28 +374,26 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
                 {problemData.title}
               </h2>
               
-              <div 
-                dangerouslySetInnerHTML={{ __html: problemData.description_html }} 
-              />
+              <MathJaxHtml html={problemData.description_html} />
               
               {problemData.input_spec_html && (
                 <>
                   <div className="section-subtitle" style={{ borderColor: 'var(--text-secondary)' }}>Input</div>
-                  <div dangerouslySetInnerHTML={{ __html: problemData.input_spec_html }} />
+                  <MathJaxHtml html={problemData.input_spec_html} />
                 </>
               )}
 
               {problemData.output_spec_html && (
                 <>
                   <div className="section-subtitle" style={{ borderColor: 'var(--text-secondary)' }}>Output</div>
-                  <div dangerouslySetInnerHTML={{ __html: problemData.output_spec_html }} />
+                  <MathJaxHtml html={problemData.output_spec_html} />
                 </>
               )}
 
               {viewMode === 'english' && hasNote && (
                 <>
                   <div className="section-subtitle" style={{ borderColor: 'var(--text-secondary)' }}>Note</div>
-                  <div dangerouslySetInnerHTML={{ __html: problemData.note_html }} />
+                  <MathJaxHtml html={problemData.note_html} />
                 </>
               )}
             </div>
@@ -457,12 +460,12 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
               {/* Chinese Note */}
               <div className="problem-html">
                 <div className="column-header-tab" style={{ marginBottom: '12px' }}>说明 (译)</div>
-                <div dangerouslySetInnerHTML={{ __html: problemData.translated.note_html || problemData.note_html }} />
+                <MathJaxHtml html={problemData.translated.note_html || problemData.note_html} />
               </div>
               {/* English Note */}
               <div className="problem-html">
                 <div className="column-header-tab en" style={{ marginBottom: '12px' }}>Original Note</div>
-                <div dangerouslySetInnerHTML={{ __html: problemData.note_html }} />
+                <MathJaxHtml html={problemData.note_html} />
               </div>
             </div>
           </div>
