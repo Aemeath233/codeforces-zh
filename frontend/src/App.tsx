@@ -69,6 +69,10 @@ export const App: React.FC = () => {
 
     showToast(`已启动批量翻译队列，共 ${selectedProblems.length} 道题目...`, 'success');
 
+    let mockCount = 0;
+    let failedCount = 0;
+    let cachedOrTranslatedCount = 0;
+
     for (let i = 0; i < selectedProblems.length; i++) {
       if (cancelBatchRef.current) {
         break;
@@ -85,6 +89,7 @@ export const App: React.FC = () => {
 
       if (isCached) {
         console.log(`Problem ${p.contest_id}${p.index} is already cached (precheck). Skipping translation and delay.`);
+        cachedOrTranslatedCount++;
         setBatchQueue(prev => ({
           ...prev,
           currentIndex: i + 1,
@@ -105,10 +110,18 @@ export const App: React.FC = () => {
           // Check if the source is served from local cache
           if (data.source === 'cache') {
             isCached = true;
+            cachedOrTranslatedCount++;
             console.log(`Problem ${p.contest_id}${p.index} loaded from cache. Skipping delay.`);
+          } else if (data.source === 'mock') {
+            mockCount++;
+            console.log(`Problem ${p.contest_id}${p.index} returned mock translation (not cached).`);
+          } else {
+            cachedOrTranslatedCount++;
+            console.log(`Problem ${p.contest_id}${p.index} translated and cached successfully.`);
           }
         } catch (err) {
           console.error(`Batch translation failed for ${p.contest_id}${p.index}:`, err);
+          failedCount++;
           showToast(`题目 ${p.contest_id}${p.index} 预翻译失败，已跳过。`, 'error');
         }
       }
@@ -157,7 +170,14 @@ export const App: React.FC = () => {
 
     // Done
     if (!cancelBatchRef.current) {
-      showToast(`🎉 批量预翻译任务已全部圆满完成！已选题目已被本地离线缓存。`, 'success');
+      if (mockCount > 0 || failedCount > 0) {
+        showToast(
+          `批量预热完成：${cachedOrTranslatedCount} 道已缓存/翻译，${mockCount} 道为模拟翻译未缓存，${failedCount} 道失败。`,
+          mockCount || failedCount ? 'error' : 'success'
+        );
+      } else {
+        showToast(`🎉 批量预翻译任务已全部圆满完成，已选题目已被本地离线缓存。`, 'success');
+      }
     } else {
       showToast('批量翻译任务已手动取消。', 'error');
     }

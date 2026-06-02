@@ -1117,4 +1117,5 @@ def get_problem(contest_id: int, index: str, force_refresh: bool = False, db: Se
         finally:
             # Clean up the lock from the active dict safely to save memory
             with active_translations_lock:
-                active_translations.pop(problem_id, None)
+                if active_translations.get(problem_id) is problem_lock:
+                    active_translations.pop(problem_id, None)
