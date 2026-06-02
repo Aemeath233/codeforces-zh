@@ -12,7 +12,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from database import init_db, get_db, SystemConfig, LLMConfig, CachedProblem, ProblemsetLibrary, ContestCache
 from scraper import scrape_cf_problem, HEADERS as CRAWLER_HEADERS
-from translator import translate_problem, test_llm_connection
+from translator import translate_problem, test_llm_connection, heal_latex_colors
 
 # Advanced Logging Configuration
 log_formatter = logging.Formatter(
@@ -1002,11 +1002,11 @@ def get_problem(contest_id: int, index: str, force_refresh: bool = False, db: Se
                 "samples": json.loads(cached.samples_json) if cached.samples_json else [],
                 "note_html": cached.note_html,
                 "translated": {
-                    "title": cached.translated_title,
-                    "description_html": cached.translated_description_html,
-                    "input_spec_html": cached.translated_input_spec_html,
-                    "output_spec_html": cached.translated_output_spec_html,
-                    "note_html": cached.translated_note_html,
+                    "title": heal_latex_colors(cached.translated_title),
+                    "description_html": heal_latex_colors(cached.translated_description_html),
+                    "input_spec_html": heal_latex_colors(cached.translated_input_spec_html),
+                    "output_spec_html": heal_latex_colors(cached.translated_output_spec_html),
+                    "note_html": heal_latex_colors(cached.translated_note_html),
                 }
             }
             
@@ -1040,11 +1040,11 @@ def get_problem(contest_id: int, index: str, force_refresh: bool = False, db: Se
                         "samples": json.loads(cached.samples_json) if cached.samples_json else [],
                         "note_html": cached.note_html,
                         "translated": {
-                            "title": cached.translated_title,
-                            "description_html": cached.translated_description_html,
-                            "input_spec_html": cached.translated_input_spec_html,
-                            "output_spec_html": cached.translated_output_spec_html,
-                            "note_html": cached.translated_note_html,
+                            "title": heal_latex_colors(cached.translated_title),
+                            "description_html": heal_latex_colors(cached.translated_description_html),
+                            "input_spec_html": heal_latex_colors(cached.translated_input_spec_html),
+                            "output_spec_html": heal_latex_colors(cached.translated_output_spec_html),
+                            "note_html": heal_latex_colors(cached.translated_note_html),
                         }
                     }
                     

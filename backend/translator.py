@@ -2,11 +2,22 @@ import json
 import logging
 import concurrent.futures
 import time
+import re
 from openai import OpenAI
 from sqlalchemy.orm import Session
 from database import SystemConfig, LLMConfig
 
 logger = logging.getLogger(__name__)
+
+def heal_latex_colors(text: str) -> str:
+    if not text or not isinstance(text, str):
+        return text
+    # Restore broken LaTeX colors (e.g., \colorred -> \color{red})
+    return re.sub(
+        r'\\color(red|green|blue|yellow|orange|purple|cyan|magenta|white|black|gray|brown)\b',
+        r'\\color{\1}',
+        text
+    )
 
 def get_mock_translation(problem_data: dict, error_logs: list = None) -> dict:
     """
@@ -83,7 +94,7 @@ def translate_problem(problem_data: dict, db: Session) -> dict:
                 "\n"
                 "CRITICAL RULES:\n"
                 "1. Keep all HTML tags (like <p>, <ul>, <li>, <pre>, <code>, etc.) exactly as they are. Only translate the text inside them.\n"
-                "2. Strictly preserve all LaTeX formulas (enclosed in $ or $$). Do NOT translate or modify formulas!\n"
+                "2. Strictly preserve all LaTeX formulas (enclosed in $ or $$). Do NOT translate, modify, or strip curly braces in formulas! (e.g. keep commands like `\\color{red}` or `\\color{green}` exactly as `\\color{red}` and `\\color{green}` with all braces and backslashes intact).\n"
                 "3. Use professional competitive programming terms (e.g. array -> 数组/序列, subsequence -> 子序列, query -> 查询/询问, tree -> 树, graph -> 图, node/vertex -> 节点/顶点, index -> 下标/索引, test case -> 测试点/测试数据).\n"
                 "4. Return ONLY a valid JSON object. Do not include any explanations, markdown code blocks, or extra text. Ensure it is a pure JSON format response."
             )
@@ -161,11 +172,11 @@ def translate_problem(problem_data: dict, db: Session) -> dict:
             
             return {
                 "is_mock": False,
-                "translated_title": translated_results.get("title") or f"[译] {problem_data['title']}",
-                "translated_description_html": success_badge + desc_html,
-                "translated_input_spec_html": translated_results.get("input_spec_html") or problem_data["input_spec_html"],
-                "translated_output_spec_html": translated_results.get("output_spec_html") or problem_data["output_spec_html"],
-                "translated_note_html": translated_results.get("note_html") or problem_data["note_html"]
+                "translated_title": heal_latex_colors(translated_results.get("title") or f"[译] {problem_data['title']}"),
+                "translated_description_html": heal_latex_colors(success_badge + desc_html),
+                "translated_input_spec_html": heal_latex_colors(translated_results.get("input_spec_html") or problem_data["input_spec_html"]),
+                "translated_output_spec_html": heal_latex_colors(translated_results.get("output_spec_html") or problem_data["output_spec_html"]),
+                "translated_note_html": heal_latex_colors(translated_results.get("note_html") or problem_data["note_html"])
             }
             
         except Exception as e:
