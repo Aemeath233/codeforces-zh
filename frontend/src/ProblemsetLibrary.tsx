@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Hash, Star, CheckSquare, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { API_BASE } from './api';
 
-interface Problem {
+export interface Problem {
   id: string;
   contest_id: number;
   index: string;
@@ -24,7 +25,7 @@ interface ProblemsetLibraryProps {
     statusText: string;
     timerCountdown: number;
   };
-  onStartBatch: (selectedProblems: any[]) => Promise<void>;
+  onStartBatch: (selectedProblems: Problem[]) => Promise<void>;
 }
 
 // Curated list of popular Codeforces tags for the selector
@@ -72,7 +73,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
     const val = localStorage.getItem('cf_lib_selected_ids');
     try {
       return val ? JSON.parse(val) : [];
-    } catch (e) {
+    } catch {
       return [];
     }
   });
@@ -82,12 +83,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
     localStorage.setItem('cf_lib_selected_ids', JSON.stringify(selectedProblemIds));
   }, [selectedProblemIds]);
 
-  // Automatically clear selection when a batch translation starts
-  useEffect(() => {
-    if (batchQueue.isActive) {
-      setSelectedProblemIds([]);
-    }
-  }, [batchQueue.isActive]);
+
 
   // Synchronize states to localStorage whenever they change
   useEffect(() => {
@@ -105,28 +101,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
     localStorage.setItem('cf_lib_sort_order', sortOrder);
   }, [page, limit, searchQuery, selectedTag, minRating, maxRating, sortBy, sortOrder]);
 
-  // Trigger load whenever filters, page, limit, or sorting changes
-  useEffect(() => {
-    fetchProblems();
-  }, [page, limit, selectedTag, minRating, maxRating, sortBy, sortOrder]);
-
-  const handleLimitChange = (newLimit: number) => {
-    setLimit(newLimit);
-    setPage(1);
-  };
-
-  const handleJumpPage = (e: React.FormEvent) => {
-    e.preventDefault();
-    const pageNum = parseInt(jumpPageInput, 10);
-    if (pageNum && pageNum >= 1 && pageNum <= totalPages) {
-      setPage(pageNum);
-      setJumpPageInput('');
-    } else {
-      onShowToast(`请输入 1 到 ${totalPages} 之间的有效页码！`, 'error');
-    }
-  };
-
-  const fetchProblems = async () => {
+  const fetchProblems = useCallback(async () => {
     setIsLoading(true);
     try {
       const queryParams = new URLSearchParams({
@@ -143,7 +118,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
         queryParams.append('sort_order', sortOrder);
       }
 
-      const response = await fetch(`http://localhost:8000/api/problems?${queryParams.toString()}`);
+      const response = await fetch(`${API_BASE}/api/problems?${queryParams.toString()}`);
       if (response.ok) {
         const data = await response.json();
         setProblems(data.problems || []);
@@ -153,9 +128,33 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
       }
     } catch (e) {
       console.error(e);
-      onShowToast('网络错误，无法加载官方题库', 'error');
+      onShowToast('网络错误，无法连接服务器', 'error');
     } finally {
       setIsLoading(false);
+    }
+  }, [page, limit, searchQuery, selectedTag, minRating, maxRating, sortBy, sortOrder, onShowToast]);
+
+  // Trigger load whenever filters, page, limit, or sorting changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchProblems();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchProblems]);
+
+  const handleLimitChange = (newLimit: number) => {
+    setLimit(newLimit);
+    setPage(1);
+  };
+
+  const handleJumpPage = (e: React.FormEvent) => {
+    e.preventDefault();
+    const pageNum = parseInt(jumpPageInput, 10);
+    if (pageNum && pageNum >= 1 && pageNum <= totalPages) {
+      setPage(pageNum);
+      setJumpPageInput('');
+    } else {
+      onShowToast(`请输入 1 到 ${totalPages} 之间的有效页码！`, 'error');
     }
   };
 
@@ -181,7 +180,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
     onShowToast('正在从 Codeforces 同步全量官方题库，请稍候...', 'success');
     
     try {
-      const response = await fetch('http://localhost:8000/api/problems/sync');
+      const response = await fetch(`${API_BASE}/api/problems/sync`);
       if (response.ok) {
         const data = await response.json();
         onShowToast(`题库同步成功！共更新了 ${data.count} 道题目。`, 'success');
@@ -363,7 +362,11 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                 取消选择
               </button>
               <button
-                onClick={() => onStartBatch(problems.filter(p => selectedProblemIds.includes(p.id)))}
+                onClick={async () => {
+                  const selectedList = problems.filter(p => selectedProblemIds.includes(p.id));
+                  setSelectedProblemIds([]);
+                  await onStartBatch(selectedList);
+                }}
                 className="search-button"
                 style={{
                   padding: '6px 16px',

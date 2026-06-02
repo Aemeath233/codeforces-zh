@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Award, X, RefreshCw } from 'lucide-react';
+import { API_BASE } from './api';
 
 interface Contest {
   id: number;
@@ -8,6 +9,16 @@ interface Contest {
   phase: string;
   durationSeconds: number;
   startTimeSeconds?: number;
+}
+
+interface ContestProblem {
+  contest_id: number;
+  index: string;
+  name: string;
+  type: string;
+  rating?: number | null;
+  tags: string[];
+  solved_status: string;
 }
 
 interface DashboardProps {
@@ -27,43 +38,38 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSearchProblem, onShowToa
 
   // Contest detail modal states
   const [selectedContest, setSelectedContest] = useState<Contest | null>(null);
-  const [contestProblems, setContestProblems] = useState<any[]>([]);
+  const [contestProblems, setContestProblems] = useState<ContestProblem[]>([]);
   const [isLoadingProblems, setIsLoadingProblems] = useState(false);
 
   useEffect(() => {
-    fetchContests();
-  }, []);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [contestSearch, selectedDiv]);
-
-  const fetchContests = async () => {
-    setIsLoadingContests(true);
-    try {
-      const response = await fetch('http://localhost:8000/api/contests');
-      if (response.ok) {
-        const data = await response.json();
-        const upcoming = data.upcoming || [];
-        const recent = data.recent || [];
-        setContests([...upcoming, ...recent]);
-      } else {
-        onShowToast('拉取 Codeforces 比赛列表失败', 'error');
+    const fetchContests = async () => {
+      setIsLoadingContests(true);
+      try {
+        const response = await fetch(`${API_BASE}/api/contests`);
+        if (response.ok) {
+          const data = await response.json();
+          const upcoming = data.upcoming || [];
+          const recent = data.recent || [];
+          setContests([...upcoming, ...recent]);
+        } else {
+          onShowToast('拉取 Codeforces 比赛列表失败', 'error');
+        }
+      } catch (error) {
+        console.error(error);
+        onShowToast('无法连接本地后端，比赛列表加载失败', 'error');
+      } finally {
+        setIsLoadingContests(false);
       }
-    } catch (error) {
-      console.error(error);
-      onShowToast('无法连接本地后端，比赛列表加载失败', 'error');
-    } finally {
-      setIsLoadingContests(false);
-    }
-  };
+    };
+    fetchContests();
+  }, [onShowToast]);
 
 
   const fetchContestProblems = async (contestId: number) => {
     setIsLoadingProblems(true);
     setContestProblems([]);
     try {
-      const response = await fetch(`http://localhost:8000/api/contest/${contestId}/problems`);
+      const response = await fetch(`${API_BASE}/api/contest/${contestId}/problems`);
       if (response.ok) {
         const data = await response.json();
         setContestProblems(data.problems || []);
@@ -166,7 +172,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSearchProblem, onShowToa
               type="text"
               placeholder="搜索比赛名称或 ID..."
               value={contestSearch}
-              onChange={(e) => setContestSearch(e.target.value)}
+              onChange={(e) => { setContestSearch(e.target.value); setCurrentPage(1); }}
               style={{
                 width: '100%',
                 padding: '8px 12px 8px 36px',
@@ -191,7 +197,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSearchProblem, onShowToa
               return (
                 <button
                   key={div}
-                  onClick={() => setSelectedDiv(div)}
+                  onClick={() => { setSelectedDiv(div); setCurrentPage(1); }}
                   style={{
                     padding: '6px 14px',
                     fontSize: '13px',

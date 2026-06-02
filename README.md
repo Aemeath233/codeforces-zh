@@ -1,5 +1,14 @@
 # Codeforces AI 智能双语翻译镜像站 (Premium Mirror)
 
+> [!CAUTION]
+> **🔒 本地自用安全警告与凭据保护提示 (Security & Credentials Warning)**  
+> 本系统为**本地自用设计**，您在“管理后台”录入的 Codeforces Handle、登录 Cookie 以及大模型 API Key 均以明文安全保存在本地 SQLite 数据库 `backend/cf_mirror.db` 中。  
+> - **切勿将包含您真实私密数据的 `backend/cf_mirror.db` 文件分享或提交至 GitHub 等任何公开仓库！**  
+> - **切勿与他人分享您的 `cf_mirror.db` 数据库文件！**  
+> - 本项目的 `.gitignore` 已预置安全防御规则自动拦截 `.db` 和 `.log` 文件，请务必保持防御配置开启，时刻保障个人账号资产安全。
+
+---
+
 这是一个为算法竞赛选手量身定制的 Codeforces 双语对照阅读与安全直交镜像系统。通过结合轻量级网页爬虫、大模型多路容灾翻译引擎、React 协调隔离渲染技术以及本地缓存防抖机制，本系统能让您在本地电脑上享受极致流畅、小说般舒适的中文刷题与评测体验。
 
 ---

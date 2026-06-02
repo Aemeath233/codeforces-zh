@@ -29,6 +29,7 @@ def get_mock_translation(problem_data: dict, error_logs: list = None) -> dict:
         error_html = "<div style='background: #fef08a; color: #854d0e; padding: 10px; border-radius: 6px; margin-bottom: 12px; font-size: 14px; border: 1px solid #fef08a;'>⚠️ [系统提示] 检测到您尚未配置大模型 API Key。当前正处于<b>模拟翻译模式</b>。请前往“管理后台”添加您的大模型密钥以激活真正的 AI 智能翻译。</div>"
     
     return {
+        "is_mock": True,
         "translated_title": f"[译] {problem_data.get('title', '')}",
         "translated_description_html": f"{error_html}<p><b>(模拟描述)</b> 这是题目的中文模拟翻译文本。为了方便您调试页面，我们在未配置 API Key 时提供此内容。</p>{problem_data.get('description_html', '')}",
         "translated_input_spec_html": f"<p><b>(模拟输入)</b> 第一行包含一个整数 $t$ ($1 \\le t \\le 10^4$) — 测试用例的数量。</p>{problem_data.get('input_spec_html', '')}",
@@ -107,26 +108,44 @@ def translate_problem(problem_data: dict, db: Session) -> dict:
                 
             res_content = response.choices[0].message.content.strip()
             
-            # Clean up any potential markdown wrappers
-            def clean_llm_response(text: str) -> str:
-                text = text.strip()
-                if text.startswith("```json"):
-                    text = text[7:]
-                elif text.startswith("```html"):
-                    text = text[7:]
-                elif text.startswith("```"):
-                    text = text[3:]
-                if text.endswith("```"):
-                    text = text[:-3]
-                return text.strip()
+            # Clean up and extract JSON from LLM response
+            def extract_and_parse_json(text: str) -> dict:
+                text_str = text.strip()
+                # Try direct parse first
+                try:
+                    return json.loads(text_str)
+                except Exception:
+                    pass
                 
-            cleaned_content = clean_llm_response(res_content)
-            
+                # Strip markdown code blocks
+                if text_str.startswith("```json"):
+                    text_str = text_str[7:]
+                elif text_str.startswith("```"):
+                    text_str = text_str[3:]
+                if text_str.endswith("```"):
+                    text_str = text_str[:-3]
+                text_str = text_str.strip()
+                try:
+                    return json.loads(text_str)
+                except Exception:
+                    pass
+                    
+                # Regex boundary search: extract from first { to last }
+                first_brace = text_str.find("{")
+                last_brace = text_str.rfind("}")
+                if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+                    json_candidate = text_str[first_brace:last_brace+1]
+                    try:
+                        return json.loads(json_candidate)
+                    except Exception:
+                        pass
+                raise Exception("LLM output did not contain a valid JSON translation block")
+                
             try:
-                translated_results = json.loads(cleaned_content)
+                translated_results = extract_and_parse_json(res_content)
             except Exception as parse_err:
                 logger.error(f"Failed to parse LLM JSON response: {str(parse_err)}. Content: {res_content}")
-                raise Exception("LLM response did not contain a valid JSON translation block")
+                raise parse_err
                 
             elapsed_time = time.time() - start_total_t
             logger.info(f"All fields translated as a single JSON request in {elapsed_time:.2f}s!")
@@ -141,6 +160,7 @@ def translate_problem(problem_data: dict, db: Session) -> dict:
             desc_html = translated_results.get("description_html") or problem_data["description_html"]
             
             return {
+                "is_mock": False,
                 "translated_title": translated_results.get("title") or f"[译] {problem_data['title']}",
                 "translated_description_html": success_badge + desc_html,
                 "translated_input_spec_html": translated_results.get("input_spec_html") or problem_data["input_spec_html"],

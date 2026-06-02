@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Clock, Calendar, ArrowRight, Star } from 'lucide-react';
+import { API_BASE } from './api';
 
 interface CachedProblem {
   id: string;
@@ -21,27 +22,26 @@ export const CachedProblems: React.FC<CachedProblemsProps> = ({ onSelectProblem,
   const [problems, setProblems] = useState<CachedProblem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchCachedProblems = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('http://localhost:8000/api/problems/cached');
-      if (response.ok) {
-        const data = await response.json();
-        setProblems(data.problems || []);
-      } else {
-        onShowToast('获取本地已译题目列表失败', 'error');
-      }
-    } catch (error) {
-      console.error(error);
-      onShowToast('网络错误，无法连接服务器', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const fetchCachedProblems = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`${API_BASE}/api/problems/cached`);
+        if (response.ok) {
+          const data = await response.json();
+          setProblems(data.problems || []);
+        } else {
+          onShowToast('获取本地已译题目列表失败', 'error');
+        }
+      } catch (error) {
+        console.error(error);
+        onShowToast('网络错误，无法连接服务器', 'error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
     fetchCachedProblems();
-  }, []);
+  }, [onShowToast]);
 
   const handleDeleteCache = async (e: React.MouseEvent, contestId: number, index: string) => {
     e.stopPropagation(); // Prevent row click
@@ -50,7 +50,7 @@ export const CachedProblems: React.FC<CachedProblemsProps> = ({ onSelectProblem,
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/problem/${contestId}/${index}`, {
+      const response = await fetch(`${API_BASE}/api/problem/${contestId}/${index}`, {
         method: 'DELETE',
       });
       if (response.ok) {

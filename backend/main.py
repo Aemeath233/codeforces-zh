@@ -35,6 +35,16 @@ app = FastAPI(title="Codeforces Translation Mirror API")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
     client_ip = request.client.host if request.client else "unknown"
+    
+    # Strictly reject non-local IP accesses for local self-use security
+    if client_ip not in ("127.0.0.1", "::1", "localhost", "unknown"):
+        logger.warning(f"Forbidden: Blocked access from non-local IP {client_ip} on path {request.url.path}")
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Forbidden: This Codeforces Mirror server is strictly restricted to local machine access for security reasons."}
+        )
+        
     method = request.method
     url = request.url.path
     
@@ -48,10 +58,13 @@ async def log_requests(request: Request, call_next):
         logger.error(f"[{client_ip}] {method} {url} - 500 ERROR - {process_time:.2f}ms - {str(e)}", exc_info=True)
         raise e
 
-# Setup CORS for development
+# Setup CORS for development - strictly restricted for local self-use safety
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -225,6 +238,13 @@ def update_user_auth(payload: dict, db: Session = Depends(get_db)):
 
 @app.post("/api/submit")
 def submit_solution(payload: dict, db: Session = Depends(get_db)):
+    # Local self-use safety guard: Disable proxy submission by default
+    import os
+    if os.getenv("ENABLE_CF_PROXY_SUBMIT") != "1":
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Direct submission proxy is disabled on this local backend by default. Please use '立即前往官网提交本题' instead, or start the backend with environment variable ENABLE_CF_PROXY_SUBMIT=1 to enable it."
+        )
     """
     Submits the solution code directly to Codeforces by simulating browser actions.
     Steps:
@@ -557,9 +577,6 @@ def sync_problemset_library(db: Session = Depends(get_db)):
             if cid and idx:
                 stats_map[f"{cid}_{idx}"] = s.get("solvedCount", 0)
                 
-        db.query(ProblemsetLibrary).delete()
-        db.commit()
-        
         mappings = []
         for p in problems:
             cid = p.get("contestId")
@@ -584,8 +601,13 @@ def sync_problemset_library(db: Session = Depends(get_db)):
                 "tags_json": json.dumps(tags)
             })
             
-        db.bulk_insert_mappings(ProblemsetLibrary, mappings)
-        db.commit()
+        try:
+            db.query(ProblemsetLibrary).delete()
+            db.bulk_insert_mappings(ProblemsetLibrary, mappings)
+            db.commit()
+        except Exception as db_err:
+            db.rollback()
+            raise db_err
         logger.info(f"Sync complete. Cached {len(mappings)} problems locally.")
         return {"status": "success", "count": len(mappings)}
         
@@ -790,7 +812,7 @@ def get_contests(db: Session = Depends(get_db)):
         }
 
 @app.get("/api/contest/{contest_id}/problems")
-async def get_contest_problems(contest_id: int, db: Session = Depends(get_db)):
+def get_contest_problems(contest_id: int, db: Session = Depends(get_db)):
     """
     Fetches the list of problems in a specific Codeforces contest.
     Strategy:
@@ -910,37 +932,36 @@ async def get_contest_problems(contest_id: int, db: Session = Depends(get_db)):
     cf_standings_url = f"https://codeforces.com/api/contest.standings?contestId={contest_id}"
     try:
         logger.info(f"Scraping failed. Falling back to official standings API: {cf_standings_url}")
-        async with httpx.AsyncClient() as client:
-            response = await client.get(cf_standings_url, timeout=20.0)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("status") == "OK":
-                    result = data.get("result", {})
-                    problems = result.get("problems", [])
-                    contest = result.get("contest", {})
-                    
-                    logger.info(f"Successfully fetched problems from standings API. Count: {len(problems)}")
-                    return {
-                        "status": "success",
-                        "contest": {
-                            "id": contest.get("id"),
-                            "name": contest.get("name"),
-                            "type": contest.get("type"),
-                            "phase": contest.get("phase")
-                        },
-                        "problems": [
-                            {
-                                "contest_id": p.get("contestId"),
-                                "index": p.get("index"),
-                                "name": p.get("name"),
-                                "type": p.get("type"),
-                                "rating": p.get("rating"),
-                                "tags": p.get("tags", []),
-                                "solved_status": status_map.get(f"{p.get('contestId')}_{p.get('index', '').upper()}", "NONE")
-                            }
-                            for p in problems
-                        ]
-                    }
+        response = requests.get(cf_standings_url, timeout=20.0)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("status") == "OK":
+                result = data.get("result", {})
+                problems = result.get("problems", [])
+                contest = result.get("contest", {})
+                
+                logger.info(f"Successfully fetched problems from standings API. Count: {len(problems)}")
+                return {
+                    "status": "success",
+                    "contest": {
+                        "id": contest.get("id"),
+                        "name": contest.get("name"),
+                        "type": contest.get("type"),
+                        "phase": contest.get("phase")
+                    },
+                    "problems": [
+                        {
+                            "contest_id": p.get("contestId"),
+                            "index": p.get("index"),
+                            "name": p.get("name"),
+                            "type": p.get("type"),
+                            "rating": p.get("rating"),
+                            "tags": p.get("tags", []),
+                            "solved_status": status_map.get(f"{p.get('contestId')}_{p.get('index', '').upper()}", "NONE")
+                        }
+                        for p in problems
+                    ]
+                }
     except Exception as api_err:
         logger.error(f"Failed to fetch from official standings API: {str(api_err)}")
         
@@ -996,101 +1017,104 @@ def get_problem(contest_id: int, index: str, force_refresh: bool = False, db: Se
         problem_lock = active_translations[problem_id]
         
     with problem_lock:
-        # Double-check cache inside lock (in case another thread just completed it)
-        if not force_refresh:
-            cached = db.query(CachedProblem).filter(CachedProblem.id == problem_id).first()
-            if cached:
-                logger.info(f"Serving cached translation after waiting on lock: {problem_id}")
-                return {
-                    "status": "success",
-                    "source": "cache",
-                    "problem_id": problem_id,
-                    "contest_id": contest_id,
-                    "index": index_upper,
-                    "title": cached.title,
-                    "time_limit": cached.time_limit,
-                    "memory_limit": cached.memory_limit,
-                    "input_file": cached.input_file,
-                    "output_file": cached.output_file,
-                    "description_html": cached.description_html,
-                    "input_spec_html": cached.input_spec_html,
-                    "output_spec_html": cached.output_spec_html,
-                    "samples": json.loads(cached.samples_json) if cached.samples_json else [],
-                    "note_html": cached.note_html,
-                    "translated": {
-                        "title": cached.translated_title,
-                        "description_html": cached.translated_description_html,
-                        "input_spec_html": cached.translated_input_spec_html,
-                        "output_spec_html": cached.translated_output_spec_html,
-                        "note_html": cached.translated_note_html,
-                    }
-                }
-                
-        # Cache miss - proceed to scrape and translate
-        logger.info(f"Cache miss for problem (executing translation): {problem_id}")
         try:
-            scraped_data = scrape_cf_problem(contest_id, index_upper)
-        except Exception as e:
-            logger.error(f"Scraping failed: {str(e)}")
-            raise HTTPException(status_code=404, detail=f"无法从 Codeforces 获取该题目。详情: {str(e)}")
+            # Double-check cache inside lock (in case another thread just completed it)
+            if not force_refresh:
+                cached = db.query(CachedProblem).filter(CachedProblem.id == problem_id).first()
+                if cached:
+                    logger.info(f"Serving cached translation after waiting on lock: {problem_id}")
+                    return {
+                        "status": "success",
+                        "source": "cache",
+                        "problem_id": problem_id,
+                        "contest_id": contest_id,
+                        "index": index_upper,
+                        "title": cached.title,
+                        "time_limit": cached.time_limit,
+                        "memory_limit": cached.memory_limit,
+                        "input_file": cached.input_file,
+                        "output_file": cached.output_file,
+                        "description_html": cached.description_html,
+                        "input_spec_html": cached.input_spec_html,
+                        "output_spec_html": cached.output_spec_html,
+                        "samples": json.loads(cached.samples_json) if cached.samples_json else [],
+                        "note_html": cached.note_html,
+                        "translated": {
+                            "title": cached.translated_title,
+                            "description_html": cached.translated_description_html,
+                            "input_spec_html": cached.translated_input_spec_html,
+                            "output_spec_html": cached.translated_output_spec_html,
+                            "note_html": cached.translated_note_html,
+                        }
+                    }
+                    
+            # Cache miss - proceed to scrape and translate
+            logger.info(f"Cache miss for problem (executing translation): {problem_id}")
+            try:
+                scraped_data = scrape_cf_problem(contest_id, index_upper)
+            except Exception as e:
+                logger.error(f"Scraping failed: {str(e)}")
+                raise HTTPException(status_code=404, detail=f"无法从 Codeforces 获取该题目。详情: {str(e)}")
+                
+            translated_data = translate_problem(scraped_data, db)
             
-        translated_data = translate_problem(scraped_data, db)
-        
-        # Save to Cache
-        existing = db.query(CachedProblem).filter(CachedProblem.id == problem_id).first()
-        if existing:
-            db.delete(existing)
-            db.commit()
-            
-        new_cache = CachedProblem(
-            id=problem_id,
-            contest_id=contest_id,
-            index=index_upper,
-            title=scraped_data["title"],
-            time_limit=scraped_data["time_limit"],
-            memory_limit=scraped_data["memory_limit"],
-            input_file=scraped_data["input_file"],
-            output_file=scraped_data["output_file"],
-            description_html=scraped_data["description_html"],
-            input_spec_html=scraped_data["input_spec_html"],
-            output_spec_html=scraped_data["output_spec_html"],
-            samples_json=scraped_data["samples_json"],
-            note_html=scraped_data["note_html"],
-            translated_title=translated_data["translated_title"],
-            translated_description_html=translated_data["translated_description_html"],
-            translated_input_spec_html=translated_data["translated_input_spec_html"],
-            translated_output_spec_html=translated_data["translated_output_spec_html"],
-            translated_note_html=translated_data["translated_note_html"]
-        )
-        
-        db.add(new_cache)
-        db.commit()
-        
-        # Clean up the lock from the active dict safely to save memory
-        with active_translations_lock:
-            active_translations.pop(problem_id, None)
-            
-        return {
-            "status": "success",
-            "source": "network",
-            "problem_id": problem_id,
-            "contest_id": contest_id,
-            "index": index_upper,
-            "title": scraped_data["title"],
-            "time_limit": scraped_data["time_limit"],
-            "memory_limit": scraped_data["memory_limit"],
-            "input_file": scraped_data["input_file"],
-            "output_file": scraped_data["output_file"],
-            "description_html": scraped_data["description_html"],
-            "input_spec_html": scraped_data["input_spec_html"],
-            "output_spec_html": scraped_data["output_spec_html"],
-            "samples": json.loads(scraped_data["samples_json"]) if scraped_data["samples_json"] else [],
-            "note_html": scraped_data["note_html"],
-            "translated": {
-                "title": translated_data["translated_title"],
-                "description_html": translated_data["translated_description_html"],
-                "input_spec_html": translated_data["translated_input_spec_html"],
-                "output_spec_html": translated_data["translated_output_spec_html"],
-                "note_html": translated_data["translated_note_html"],
+            # Save to Cache ONLY if it's not a mock fallback!
+            is_mock = translated_data.get("is_mock", False)
+            if not is_mock:
+                existing = db.query(CachedProblem).filter(CachedProblem.id == problem_id).first()
+                if existing:
+                    db.delete(existing)
+                    db.commit()
+                    
+                new_cache = CachedProblem(
+                    id=problem_id,
+                    contest_id=contest_id,
+                    index=index_upper,
+                    title=scraped_data["title"],
+                    time_limit=scraped_data["time_limit"],
+                    memory_limit=scraped_data["memory_limit"],
+                    input_file=scraped_data["input_file"],
+                    output_file=scraped_data["output_file"],
+                    description_html=scraped_data["description_html"],
+                    input_spec_html=scraped_data["input_spec_html"],
+                    output_spec_html=scraped_data["output_spec_html"],
+                    samples_json=scraped_data["samples_json"],
+                    note_html=scraped_data["note_html"],
+                    translated_title=translated_data["translated_title"],
+                    translated_description_html=translated_data["translated_description_html"],
+                    translated_input_spec_html=translated_data["translated_input_spec_html"],
+                    translated_output_spec_html=translated_data["translated_output_spec_html"],
+                    translated_note_html=translated_data["translated_note_html"]
+                )
+                
+                db.add(new_cache)
+                db.commit()
+                
+            return {
+                "status": "success",
+                "source": "mock" if is_mock else "network",
+                "problem_id": problem_id,
+                "contest_id": contest_id,
+                "index": index_upper,
+                "title": scraped_data["title"],
+                "time_limit": scraped_data["time_limit"],
+                "memory_limit": scraped_data["memory_limit"],
+                "input_file": scraped_data["input_file"],
+                "output_file": scraped_data["output_file"],
+                "description_html": scraped_data["description_html"],
+                "input_spec_html": scraped_data["input_spec_html"],
+                "output_spec_html": scraped_data["output_spec_html"],
+                "samples": json.loads(scraped_data["samples_json"]) if scraped_data["samples_json"] else [],
+                "note_html": scraped_data["note_html"],
+                "translated": {
+                    "title": translated_data["translated_title"],
+                    "description_html": translated_data["translated_description_html"],
+                    "input_spec_html": translated_data["translated_input_spec_html"],
+                    "output_spec_html": translated_data["translated_output_spec_html"],
+                    "note_html": translated_data["translated_note_html"],
+                }
             }
-        }
+        finally:
+            # Clean up the lock from the active dict safely to save memory
+            with active_translations_lock:
+                active_translations.pop(problem_id, None)

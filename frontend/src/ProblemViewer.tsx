@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { RefreshCw, BookOpen, Layers, Languages, Copy, Check, Clock, Cpu, FileText, Send, AlertTriangle } from 'lucide-react';
+import { API_BASE } from './api';
 
 interface Sample {
   input: string;
   output: string;
 }
 
-interface ProblemData {
+export interface ProblemData {
   problem_id: string;
   contest_id: number;
   index: string;
@@ -234,6 +235,13 @@ interface MathJaxHtmlProps {
   className?: string;
 }
 
+interface MathJaxWindow extends Window {
+  MathJax?: {
+    typesetClear?: (elements: (HTMLElement | null)[]) => void;
+    typesetPromise?: (elements: (HTMLElement | null)[]) => Promise<void>;
+  };
+}
+
 const MathJaxHtml: React.FC<MathJaxHtmlProps> = React.memo(({ html, className }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -241,18 +249,20 @@ const MathJaxHtml: React.FC<MathJaxHtmlProps> = React.memo(({ html, className })
     let isMounted = true;
     let pollCount = 0;
     const maxPolls = 100; // Poll for up to 5 seconds (50ms * 100)
-    let pollInterval: any = null;
+    let pollInterval: number | undefined = undefined;
 
     const runTypeset = () => {
-      const mathJax = (window as any).MathJax;
+      const mathJax = (window as unknown as MathJaxWindow).MathJax;
       if (mathJax && mathJax.typesetPromise && containerRef.current) {
         try {
-          mathJax.typesetClear([containerRef.current]);
+          if (mathJax.typesetClear) {
+            mathJax.typesetClear([containerRef.current]);
+          }
         } catch (e) {
           console.warn('MathJax typesetClear warning:', e);
         }
 
-        mathJax.typesetPromise([containerRef.current]).catch((err: any) => {
+        mathJax.typesetPromise([containerRef.current])?.catch((err: unknown) => {
           console.error('MathJax rendering error:', err);
         });
 
@@ -267,15 +277,15 @@ const MathJaxHtml: React.FC<MathJaxHtmlProps> = React.memo(({ html, className })
     // Run immediately or start polling
     const success = runTypeset();
     if (!success) {
-      pollInterval = setInterval(() => {
+      pollInterval = window.setInterval(() => {
         if (!isMounted) {
           clearInterval(pollInterval);
           return;
         }
         pollCount++;
-        const done = runTypeset();
-        if (done || pollCount >= maxPolls) {
-          clearInterval(pollInterval);
+        runTypeset();
+        if (pollCount >= maxPolls) {
+          if (pollInterval) clearInterval(pollInterval);
         }
       }, 50);
     }
@@ -500,7 +510,7 @@ export const ProblemViewer: React.FC<ProblemViewerProps> = ({ problemData, onRef
     onShowToast('正在为您重构并重新翻译题面，请稍候...', 'success');
     try {
       const response = await fetch(
-        `http://localhost:8000/api/problem/${problemData.contest_id}/${problemData.index}?force_refresh=true`
+        `${API_BASE}/api/problem/${problemData.contest_id}/${problemData.index}?force_refresh=true`
       );
       if (response.ok) {
         onShowToast('重新翻译成功！已更新题面。', 'success');
@@ -517,9 +527,9 @@ export const ProblemViewer: React.FC<ProblemViewerProps> = ({ problemData, onRef
     }
   };
 
-  const checkUserConfig = async () => {
+  const checkUserConfig = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/config/user');
+      const response = await fetch(`${API_BASE}/api/config/user`);
       if (response.ok) {
         const data = await response.json();
         setCfUser(data);
@@ -527,11 +537,14 @@ export const ProblemViewer: React.FC<ProblemViewerProps> = ({ problemData, onRef
     } catch (error) {
       console.error('Failed to check user config:', error);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    checkUserConfig();
-  }, [problemData]);
+    const timer = setTimeout(() => {
+      checkUserConfig();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [problemData, checkUserConfig]);
 
   const hasNote = !!(problemData.note_html || (problemData.translated && problemData.translated.note_html));
 

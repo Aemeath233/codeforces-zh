@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Save, Plus, Trash2, Edit2, Play, CheckCircle2, AlertCircle, ToggleLeft, ToggleRight, User, ShieldCheck } from 'lucide-react';
+import { API_BASE } from './api';
 
 interface LLMConfig {
   id?: number;
@@ -45,19 +46,9 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
   const [isSavingNode, setIsSavingNode] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    await fetchSystemPrompt();
-    await fetchLLMConfigs();
-    await fetchUserAuth();
-  };
-
-  const fetchSystemPrompt = async () => {
+  const fetchSystemPrompt = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/config/system_prompt');
+      const response = await fetch(`${API_BASE}/api/config/system_prompt`);
       if (response.ok) {
         const data = await response.json();
         setSystemPrompt(data.system_prompt || '');
@@ -66,11 +57,11 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
       console.error(e);
       onShowToast('获取系统提示词失败', 'error');
     }
-  };
+  }, [onShowToast]);
 
-  const fetchLLMConfigs = async () => {
+  const fetchLLMConfigs = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/config/llm');
+      const response = await fetch(`${API_BASE}/api/config/llm`);
       if (response.ok) {
         const data = await response.json();
         setLlmConfigs(data || []);
@@ -79,11 +70,11 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
       console.error(e);
       onShowToast('获取 API 节点列表失败', 'error');
     }
-  };
+  }, [onShowToast]);
 
-  const fetchUserAuth = async () => {
+  const fetchUserAuth = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/config/user');
+      const response = await fetch(`${API_BASE}/api/config/user`);
       if (response.ok) {
         const data = await response.json();
         setCfHandle(data.cf_handle || '');
@@ -94,13 +85,26 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
       console.error(e);
       onShowToast('获取用户登录状态失败', 'error');
     }
-  };
+  }, [onShowToast]);
+
+  const fetchData = useCallback(async () => {
+    await fetchSystemPrompt();
+    await fetchLLMConfigs();
+    await fetchUserAuth();
+  }, [fetchSystemPrompt, fetchLLMConfigs, fetchUserAuth]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchData();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchData]);
 
   const handleSavePrompt = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingPrompt(true);
     try {
-      const response = await fetch('http://localhost:8000/api/config/system_prompt', {
+      const response = await fetch(`${API_BASE}/api/config/system_prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ system_prompt: systemPrompt })
@@ -127,7 +131,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
 
     setIsSavingUser(true);
     try {
-      const response = await fetch('http://localhost:8000/api/config/user', {
+      const response = await fetch(`${API_BASE}/api/config/user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -180,7 +184,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
     
     setIsSavingNode(true);
     try {
-      const response = await fetch('http://localhost:8000/api/config/llm', {
+      const response = await fetch(`${API_BASE}/api/config/llm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -212,7 +216,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
   const handleDeleteNode = async (id: number) => {
     if (!window.confirm('您确定要删除这个 API 节点吗？')) return;
     try {
-      const response = await fetch(`http://localhost:8000/api/config/llm/${id}`, {
+      const response = await fetch(`${API_BASE}/api/config/llm/${id}`, {
         method: 'DELETE'
       });
       if (response.ok) {
@@ -229,7 +233,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
 
   const handleToggleActive = async (node: LLMConfig) => {
     try {
-      const response = await fetch('http://localhost:8000/api/config/llm', {
+      const response = await fetch(`${API_BASE}/api/config/llm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -260,7 +264,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
     onShowToast(`正在向 ${node.name} 发送轻量级 token 测试连接...`, 'success');
 
     try {
-      const response = await fetch('http://localhost:8000/api/config/test', {
+      const response = await fetch(`${API_BASE}/api/config/test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -285,7 +289,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
         }));
         onShowToast(`测试失败：${data.detail || '无法连接'}`, 'error');
       }
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
       setTestStatus((prev) => ({
         ...prev,

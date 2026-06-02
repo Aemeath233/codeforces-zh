@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import { LayoutDashboard, Languages, Settings, GraduationCap, X, AlertCircle, History } from 'lucide-react';
 import { Dashboard } from './Dashboard';
 import { ProblemsetLibrary } from './ProblemsetLibrary';
+import type { Problem } from './ProblemsetLibrary';
 import { ProblemViewer } from './ProblemViewer';
+import type { ProblemData } from './ProblemViewer';
 import { AdminSettings } from './AdminSettings';
 import { CachedProblems } from './CachedProblems';
+import { API_BASE } from './api';
 
 type Tab = 'dashboard' | 'problemset' | 'problem' | 'settings' | 'cached';
 
@@ -22,11 +25,11 @@ export const App: React.FC = () => {
     }
     return 'problemset';
   });
-  const [currentProblem, setCurrentProblem] = useState<any>(() => {
+  const [currentProblem, setCurrentProblem] = useState<ProblemData | null>(() => {
     const val = localStorage.getItem('cf_current_problem');
     try {
-      return val ? JSON.parse(val) : null;
-    } catch (e) {
+      return val ? JSON.parse(val) as ProblemData : null;
+    } catch {
       return null;
     }
   });
@@ -53,7 +56,7 @@ export const App: React.FC = () => {
   const cancelBatchRef = React.useRef(false);
 
   // Start the background batch translation loop
-  const handleStartBatchTranslation = async (selectedProblems: any[]) => {
+  const handleStartBatchTranslation = async (selectedProblems: Problem[]) => {
     cancelBatchRef.current = false;
     setBatchQueue({
       isActive: true,
@@ -93,7 +96,7 @@ export const App: React.FC = () => {
       } else {
         try {
           // Trigger scraping and translation on the backend by hitting the GET endpoint
-          const response = await fetch(`http://localhost:8000/api/problem/${p.contest_id}/${p.index}`);
+          const response = await fetch(`${API_BASE}/api/problem/${p.contest_id}/${p.index}`);
           if (!response.ok) {
             throw new Error('翻译接口返回异常');
           }
@@ -214,7 +217,7 @@ export const App: React.FC = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/problem/${contestId}/${index}?force_refresh=${force}`
+        `${API_BASE}/api/problem/${contestId}/${index}?force_refresh=${force}`
       );
       if (response.ok) {
         const data = await response.json();
