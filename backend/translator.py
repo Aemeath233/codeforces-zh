@@ -12,12 +12,25 @@ logger = logging.getLogger(__name__)
 def heal_latex_colors(text: str) -> str:
     if not text or not isinstance(text, str):
         return text
-    # Restore broken LaTeX colors (e.g., \colorred -> \color{red})
-    return re.sub(
-        r'\\color(red|green|blue|yellow|orange|purple|cyan|magenta|white|black|gray|brown)\b',
+    colors = r'red|green|blue|yellow|orange|purple|cyan|magenta|white|black|gray|grey|brown|lime|pink|teal|violet'
+    healed = text
+    # Restore broken LaTeX colors from LLM output, e.g. \colorred -> \color{red}.
+    healed = re.sub(
+        rf'\\color({colors})\b',
         r'\\color{\1}',
-        text
+        healed,
+        flags=re.IGNORECASE
     )
+    # Restore variants where braces were stripped but whitespace remains, e.g. \color red ) -> \color{red} ).
+    healed = re.sub(
+        rf'\\color\s+({colors})\b',
+        r'\\color{\1}',
+        healed,
+        flags=re.IGNORECASE
+    )
+    # Some models emit \color{red}x where MathJax's color package applies the color to following tokens.
+    # Keep that form intact; MathJax handles it once the color package is loaded.
+    return healed
 
 def get_mock_translation(problem_data: dict, error_logs: list = None) -> dict:
     """
