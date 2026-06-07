@@ -89,38 +89,46 @@ CF/
 │   └── vite.config.ts        # Vite 打包配置
 │
 ├── .gitignore                # 仓库级别防污染 Git 忽略清单
-├── README.md                 # 软件工程系统架构与运维手册
-├── start.py                  # 一键创建 Python 虚拟环境与前后端启动热重载监测管理脚本
-└── scratch_test.py           # 临时系统检测沙盒脚本
+└── README.md                 # 软件工程系统架构与运维手册
 ```
 
 ---
 
-## 🚀 极速上手说明 (Quick Start)
+## 🚀 部署与启动说明 (Deployment & Startup)
 
-### 1. Windows 一键启动 (最推荐)
-请确保您的 Windows 系统已提前安装好 Python 3.8+ 与 Node.js/npm，然后直接在项目根目录下双击运行：
-* **`一键启动.bat`**
+### 1. 后端 FastAPI 服务启动
+请确保您的系统已安装 Python 3.8+。
+1. 安装依赖包：
+   ```bash
+   pip install -r requirements.txt
+   ```
+   *(或者进入 `backend` 目录执行 `pip install -r requirements.txt`)*
 
-**启动说明：**
-双击 `一键启动.bat` 将调用底层的 `start.py` 核心引导程序。该程序在本地运行时会自动：
-1. 检测并自动创建 **Python 官方自带的虚拟环境 (`.venv`)**。
-2. 自动在虚拟环境中安装后端所有需要的 Python 依赖包。
-3. 检查前端 `node_modules`，如果不存在则自动执行 `npm install` 补全安装所有前端依赖。
-4. 自动检测并释放本地被占用的 `8000` 与 `5173` 端口。
-5. 启动后端服务器与前端开发服务，并在默认浏览器中为您打开主界面！
-
-*注意：系统需要您提前在本地自行安装好 Python 和 Node.js 环境，`start.py` 不会自动安装系统级别的 Python/Node.js，也不包含 winget 自动安装。*
+2. 运行 FastAPI 服务（开发热重载模式）：
+   ```bash
+   cd backend
+   uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+   ```
+   *如果在服务器生产环境部署，建议将 `--host` 设置为 `0.0.0.0`，并移除 `--reload`，或使用 `gunicorn` / `pm2` 进行进程守护。*
 
 ---
 
-### 2. 跨平台手动启动 / 自定义启动 (Linux / macOS / Windows CMD)
-如果您习惯使用终端或者在 macOS/Linux 上开发，可以直接运行主启动脚本：
-```bash
-python start.py
-```
-该脚本完全使用 **Python 自带的虚拟环境 (`.venv`)** 进行跨平台隔离，不依赖 conda。它会自动建立本地环境，激活并自动热重载拉起所有前后端服务。
-
+### 2. 前端 Vite + React 启动
+请确保您的系统已安装 Node.js (建议 v18+) 与 npm/yarn。
+1. 进入前端目录并安装依赖包：
+   ```bash
+   cd frontend
+   npm install --legacy-peer-deps
+   ```
+2. 启动开发服务器：
+   ```bash
+   npm run dev
+   ```
+3. 生产环境打包部署（推荐）：
+   ```bash
+   npm run build
+   ```
+   打包完成后，将 `dist` 目录配置至 Nginx / Apache 或使用静态文件托管服务即可。
 
 ---
 
@@ -133,6 +141,5 @@ python start.py
 ---
 
 ## 🛡️ 软件维护与排错
-- **公式加载？**：MathJax 静态资源已完全保存在本地 `frontend/public/` 目录下，100% 本地极速加载，不依赖任何外部 CDN，且内置白名单 HTML 清洗过滤以确保公式安全渲染。
-- **系统关闭？**：双击运行根目录下的 `一键关闭.bat` 即可。该脚本会使用 PowerShell 严格验证监听 `8000` (后端) 和 `5173` (前端) 端口进程的命令行信息，**必须匹配本项目根目录路径**且包含 `uvicorn`/`node`/`npm`/`vite`/`python` 特征的进程才会执行关闭，绝不会误杀其他无关的应用程序。
+- **公式加载？**：MathJax 静态资源已完全保存在本地 `frontend/public/` 目录下，100% 本地极速加载，不依赖 any 外部 CDN，且内置白名单 HTML 清洗过滤以确保公式安全渲染。
 - **系统报错？**：可直接打开 `backend/backend_app.log` 文本文件。全链路中间件已将所有的 API 延迟毫秒数与 500 Stacktrace 记录其中，像飞机黑匣子一样清晰好找！
