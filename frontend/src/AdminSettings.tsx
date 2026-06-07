@@ -16,22 +16,24 @@ interface LLMConfig {
 
 interface AdminSettingsProps {
   onShowToast: (message: string, type: 'success' | 'error') => void;
+  onUserConfigSaved?: () => void;
 }
 
-export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => {
+export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast, onUserConfigSaved }) => {
   const [llmConfigs, setLlmConfigs] = useState<LLMConfig[]>([]);
   const [systemPrompt, setSystemPrompt] = useState('');
-  
+
   // Codeforces user account states
   const [cfHandle, setCfHandle] = useState('');
   const [cfCookies, setCfCookies] = useState('');
   const [cfCookiesConfigured, setCfCookiesConfigured] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Form states for creating / editing an LLM node
   const [editingNode, setEditingNode] = useState<LLMConfig | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  
+
   // Single node form states
   const [formName, setFormName] = useState('');
   const [formApiKey, setFormApiKey] = useState('');
@@ -42,7 +44,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
 
   // Connection testing states per node ID
   const [testStatus, setTestStatus] = useState<{ [key: number]: { loading: boolean; success?: boolean; reply?: string } }>({});
-  
+
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
   const [isSavingNode, setIsSavingNode] = useState(false);
 
@@ -140,8 +142,11 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
         })
       });
       if (response.ok) {
-        onShowToast('Codeforces 登录凭证保存成功！在线提交功能已激活。', 'success');
+        onShowToast('Codeforces 登录凭证保存成功！做题状态同步功能已激活。', 'success');
         fetchUserAuth();
+        if (onUserConfigSaved) {
+          onUserConfigSaved();
+        }
       } else {
         onShowToast('保存登录凭证失败', 'error');
       }
@@ -181,7 +186,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
       onShowToast('请填写节点标识名称！', 'error');
       return;
     }
-    
+
     setIsSavingNode(true);
     try {
       const response = await fetch(`${API_BASE}/api/config/llm`, {
@@ -256,7 +261,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
 
   const handleTestNode = async (node: LLMConfig) => {
     if (!node.id) return;
-    
+
     setTestStatus((prev) => ({
       ...prev,
       [node.id!]: { loading: true }
@@ -301,25 +306,25 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
+
       {/* Page Header */}
       <div className="page-header">
         <h1 className="page-title">管理后台 (控制与配置)</h1>
-        <p className="page-subtitle">配置您的多个大模型 API 以及 Codeforces 登录凭证，开启无缝翻译与在线安全一键提交体验。</p>
+        <p className="page-subtitle">配置您的多个大模型 API 以及 Codeforces 登录凭证，开启无缝翻译与做题状态/AC状态自动同步体验。</p>
       </div>
 
       {/* Codeforces Account Form */}
       <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '32px', boxShadow: 'var(--shadow-premium)' }}>
         <h2 className="panel-title" style={{ border: 'none', padding: 0, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <User size={20} style={{ color: 'var(--primary)' }} />
-          Codeforces 账户导入与登录凭证设置 (用于在线提交)
+          Codeforces 账户导入与登录凭证设置 (用于同步做题/AC状态)
         </h2>
-        
+
         <form onSubmit={handleSaveUserAuth} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 3fr', gap: '16px' }}>
-            <div className="form-group">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="form-group" style={{ maxWidth: '400px' }}>
               <label className="form-label" htmlFor="cfHandle">
-                CF 用户名 (Handle)
+                CF 用户名 (Handle) *
               </label>
               <input
                 id="cfHandle"
@@ -330,32 +335,61 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
                 onChange={(e) => setCfHandle(e.target.value)}
                 required
               />
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', display: 'inline-block' }}>
+                仅需填写用户名即可自动同步并标记已通过的题目，无需输入密码或 Cookie。
+              </span>
             </div>
 
-            <div className="form-group">
-              <label className="form-label" htmlFor="cfCookies">
-                浏览器登录 Cookies
-              </label>
-              <input
-                id="cfCookies"
-                type="password"
-                className="form-input"
-                placeholder={cfCookiesConfigured ? `已导入 Cookies: **** (粘贴新值可进行覆盖)` : "请粘贴您在 Codeforces 官网登录后的全部 Cookie 字符串"}
-                value={cfCookies}
-                onChange={(e) => setCfCookies(e.target.value)}
-              />
+            {/* Advanced Section Toggle */}
+            <div style={{ marginTop: '4px' }}>
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="btn-secondary"
+                style={{ padding: '6px 12px', fontSize: '12.5px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}
+              >
+                {showAdvanced ? '隐藏高级设置 (Cookie)' : '显示高级设置 (Cookie 保留用途)'}
+              </button>
             </div>
-          </div>
 
-          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', backgroundColor: 'var(--bg-main)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)', lineHeight: 1.6 }}>
-            💡 <b>两步教您如何快速获取 Cookies 字符串：</b>
-            <ol style={{ marginLeft: '20px', marginTop: '6px' }}>
-              <li>用 Chrome/Edge 浏览器打开并登录 <a href="https://codeforces.com" target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>codeforces.com</a>。</li>
-              <li>按键盘 <b>F12</b> 键打开开发者工具 &rarr; 切换到顶部的 <b>“控制台 (Console)”</b> &rarr; 输入 <code>document.cookie</code> 回车 &rarr; **复制返回的整段带引号的字符串文本**，直接贴到上面的输入框即可！</li>
-            </ol>
-            {cfCookiesConfigured && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--success)', marginTop: '8px', fontWeight: 600 }}>
-                <ShieldCheck size={16} /> 本地 Cookie 凭证校验通过。您现在已可以在任意题面直接在线一键提交代码！
+            {showAdvanced && (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                  padding: '20px',
+                  backgroundColor: 'var(--bg-hover)',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border-color)',
+                  marginTop: '4px'
+                }}
+              >
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" htmlFor="cfCookies">
+                    浏览器登录 Cookies (高级保留用途 - 默认留空)
+                  </label>
+                  <input
+                    id="cfCookies"
+                    type="password"
+                    className="form-input"
+                    placeholder={cfCookiesConfigured ? `已导入 Cookies: **** (粘贴新值可进行覆盖)` : "通常留空即可。如需保留以作未来接口代理提交等高级用途，请粘贴您的 Cookie"}
+                    value={cfCookies}
+                    onChange={(e) => setCfCookies(e.target.value)}
+                  />
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                  💡 <b>两步教您如何快速获取 Cookies 字符串：</b>
+                  <ol style={{ marginLeft: '20px', marginTop: '6px' }}>
+                    <li>用 Chrome/Edge 浏览器打开并登录 <a href="https://codeforces.com" target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>codeforces.com</a>。</li>
+                    <li>按键盘 <b>F12</b> 键打开开发者工具 &rarr; 切换到顶部的 <b>“控制台 (Console)”</b> &rarr; 输入 <code>document.cookie</code> 回车 &rarr; **复制返回的整段带引号的字符串文本**，直接贴到上面的输入框即可！</li>
+                  </ol>
+                  {cfCookiesConfigured && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--success)', marginTop: '8px', fontWeight: 600 }}>
+                      <ShieldCheck size={16} /> 本地 Cookie 凭证已导入（目前代理提交默认关闭，Cookie 仅作为高级用途保留）。
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -485,7 +519,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onShowToast }) => 
           <h3 className="panel-title" style={{ border: 'none', padding: 0 }}>
             {editingNode ? '⚙️ 修改 API 节点参数' : '➕ 添加全新大模型 API 节点'}
           </h3>
-          
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div className="form-group">
               <label className="form-label">节点名称</label>

@@ -7,6 +7,7 @@ import json
 import logging
 from logging.handlers import RotatingFileHandler
 import time
+import threading
 from typing import Optional, List
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -35,7 +36,7 @@ app = FastAPI(title="Codeforces Translation Mirror API")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
     client_ip = request.client.host if request.client else "unknown"
-    
+
     # Strictly reject non-local IP accesses for local self-use security
     if client_ip not in ("127.0.0.1", "::1", "localhost", "unknown"):
         logger.warning(f"Forbidden: Blocked access from non-local IP {client_ip} on path {request.url.path}")
@@ -44,10 +45,10 @@ async def log_requests(request: Request, call_next):
             status_code=403,
             content={"detail": "Forbidden: This Codeforces Mirror server is strictly restricted to local machine access for security reasons."}
         )
-        
+
     method = request.method
     url = request.url.path
-    
+
     try:
         response = await call_next(request)
         process_time = (time.time() - start_time) * 1000
@@ -99,7 +100,7 @@ def update_system_prompt(payload: dict, db: Session = Depends(get_db)):
     if not config:
         config = SystemConfig(id=1)
         db.add(config)
-    
+
     system_prompt = payload.get("system_prompt")
     if system_prompt is not None:
         config.system_prompt = system_prompt.strip()
@@ -132,18 +133,18 @@ def save_llm_config(payload: dict, db: Session = Depends(get_db)):
     model = payload.get("model", "gpt-4o-mini").strip()
     priority = payload.get("priority", 1)
     is_active = payload.get("is_active", True)
-    
+
     if config_id:
         config = db.query(LLMConfig).filter(LLMConfig.id == config_id).first()
         if not config:
             raise HTTPException(status_code=404, detail="LLM 配置未找到")
-            
+
         config.name = name
         config.base_url = base_url
         config.model = model
         config.priority = priority
         config.is_active = is_active
-        
+
         if api_key and not (api_key.startswith("http") or "..." in api_key or api_key == "****"):
             config.api_key = api_key.strip()
     else:
@@ -157,7 +158,7 @@ def save_llm_config(payload: dict, db: Session = Depends(get_db)):
             is_active=is_active
         )
         db.add(config)
-        
+
     db.commit()
     return {"status": "success", "message": "API 节点已保存并更新！"}
 
@@ -166,7 +167,7 @@ def delete_llm_config(config_id: int, db: Session = Depends(get_db)):
     config = db.query(LLMConfig).filter(LLMConfig.id == config_id).first()
     if not config:
         raise HTTPException(status_code=404, detail="LLM 配置未找到")
-        
+
     db.delete(config)
     db.commit()
     return {"status": "success", "message": "API 节点已成功删除！"}
@@ -177,21 +178,21 @@ def test_config(payload: dict, db: Session = Depends(get_db)):
     api_key = payload.get("api_key", "").strip()
     base_url = payload.get("base_url", "").strip()
     model = payload.get("model", "").strip()
-    
+
     if config_id and (not api_key or api_key == "****" or "..." in api_key):
         db_config = db.query(LLMConfig).filter(LLMConfig.id == config_id).first()
         if db_config:
             api_key = db_config.api_key
-            
+
     if not api_key or api_key == "your_api_key_here":
         raise HTTPException(status_code=400, detail="API Key 不能为空")
     if not model:
         raise HTTPException(status_code=400, detail="Model 不能为空")
-        
+
     try:
         reply = test_llm_connection(api_key, base_url, model)
         return {
-            "status": "success", 
+            "status": "success",
             "message": "大模型接口连接测试成功！",
             "reply": reply
         }
@@ -200,15 +201,25 @@ def test_config(payload: dict, db: Session = Depends(get_db)):
 
 # --- Codeforces User Authentication Config ---
 
+_user_status_cache = {
+    "handle": None,
+    "last_fetched": 0,
+    "status_map": {},  # Key: "contestId_index" -> "OK" / "FAILED"
+    "last_error": None,
+    "status": "pending"  # "success" or "failed" or "pending"
+}
+_user_status_cache_lock = threading.Lock()
+
 @app.get("/api/config/user")
 def get_user_auth(db: Session = Depends(get_db)):
     config = db.query(SystemConfig).filter(SystemConfig.id == 1).first()
     if not config:
-        return {"cf_handle": "", "cf_cookies_configured": False}
+        return {"cf_handle": "", "cf_cookies_configured": False, "ac_sync_configured": False}
     return {
         "cf_handle": config.cf_handle or "",
         "cf_cookies_configured": bool(config.cf_cookies and config.cf_cookies.strip() not in ("", "your_cookies_here")),
-        "cf_cookies_masked": "****" if config.cf_cookies else ""
+        "cf_cookies_masked": "****" if config.cf_cookies else "",
+        "ac_sync_configured": bool(config.cf_handle and config.cf_handle.strip())
     }
 
 @app.post("/api/config/user")
@@ -217,12 +228,12 @@ def update_user_auth(payload: dict, db: Session = Depends(get_db)):
     if not config:
         config = SystemConfig(id=1)
         db.add(config)
-        
+
     cf_handle = payload.get("cf_handle", "").strip()
     cf_cookies = payload.get("cf_cookies")
-    
+
     config.cf_handle = cf_handle
-    
+
     # Do not overwrite if masked string is sent back
     if cf_cookies is not None and cf_cookies != "****" and cf_cookies.strip() != "":
         raw_cookies = cf_cookies.strip()
@@ -230,8 +241,18 @@ def update_user_auth(payload: dict, db: Session = Depends(get_db)):
         if (raw_cookies.startswith("'") and raw_cookies.endswith("'")) or (raw_cookies.startswith('"') and raw_cookies.endswith('"')):
             raw_cookies = raw_cookies[1:-1].strip()
         config.cf_cookies = raw_cookies
-        
+
     db.commit()
+    # Reset status cache to trigger a fresh background fetch
+    global _user_status_cache
+    with _user_status_cache_lock:
+        _user_status_cache = {
+            "handle": None,
+            "last_fetched": 0,
+            "status_map": {},
+            "last_error": None,
+            "status": "pending"
+        }
     return {"status": "success", "message": "Codeforces 账户登录信息已保存！"}
 
 # --- Codeforces Solution Direct Submission ---
@@ -257,67 +278,67 @@ def submit_solution(payload: dict, db: Session = Depends(get_db)):
     index = payload.get("index", "").strip().upper()
     program_type_id = payload.get("program_type_id")
     source_code = payload.get("source", "")
-    
+
     if not contest_id or not index or not program_type_id or not source_code:
         raise HTTPException(status_code=400, detail="参数缺失，请提供比赛ID、题号、语言ID和源码。")
-        
+
     # 1. Fetch credentials
     config = db.query(SystemConfig).filter(SystemConfig.id == 1).first()
     if not config or not config.cf_handle or not config.cf_cookies:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="请先前往“管理后台（设置）”，填写您的 Codeforces 用户名 (Handle) 和浏览器登录 Cookie！"
         )
-        
+
     cf_handle = config.cf_handle.strip()
     cf_cookies = config.cf_cookies.strip()
-    
+
     # Auto-strip any outer single or double quotes
     if (cf_cookies.startswith("'") and cf_cookies.endswith("'")) or (cf_cookies.startswith('"') and cf_cookies.endswith('"')):
         cf_cookies = cf_cookies[1:-1].strip()
-        
+
     # Check if JSESSIONID is missing in the cookie
     has_jsessionid = "JSESSIONID" in cf_cookies
-    
+
     # 2. Build custom request headers with the user's cookies
     client_headers = CRAWLER_HEADERS.copy()
     client_headers["Cookie"] = cf_cookies
-    
+
     # Determine URL structure (Gym vs Regular Contest)
     is_gym = int(contest_id) > 100000
     base_domain = "https://mirror.codeforces.com"  # Using mirror site for maximum speed and lower Cloudflare friction
-    
+
     contest_path = f"gym/{contest_id}" if is_gym else f"contest/{contest_id}"
     get_url = f"{base_domain}/{contest_path}/submit?locale=en"
     post_url = f"{base_domain}/{contest_path}/submit?action=submitSolution&locale=en"
-    
+
     logger.info(f"Preparing direct submission for {contest_id}{index} via {cf_handle}...")
-    
+
     try:
         # STEP A: GET CSRF Token
         # Using requests.Session to bypass protocol-level SSL handshake failures on Windows
         session = requests.Session()
         session.headers.update(client_headers)
-        
+
         response_get = session.get(get_url, timeout=15.0)
         if response_get.status_code != 200:
             raise Exception(f"无法访问 Codeforces 提交页面，HTTP 状态码: {response_get.status_code}")
-            
+
         # Strongly verify if we are logged in by checking the final URL
         if "submit" not in response_get.url:
             error_tip = "您的 Codeforces 登录 Cookie 已失效或不正确，无法访问提交页面！请在“管理后台”重新录入有效的 Cookie。"
             if not has_jsessionid:
                 error_tip += " (提示：检测到您的 Cookie 中似乎缺少 JSESSIONID 字段，这通常是未复制完整 Cookie 导致的，请确保复制包含 JSESSIONID 的完整 Cookie 文字)"
             raise Exception(error_tip)
-            
+
         soup = BeautifulSoup(response_get.text, "html.parser")
-        
+
         # Check if user is actually logged in (if cookie is valid)
         # If the page contains a login form, cookies are expired
         login_form = soup.find("form", id="enterForm")
         if login_form or ("Login" in response_get.text and "Logout" not in response_get.text):
             raise Exception("您的 Codeforces 登录 Cookie 已失效或不正确，被系统拒之门外，请在“管理后台”重新录入！")
-            
+
         # Extract csrf token
         csrf_token = None
         meta = soup.find("meta", {"name": "X-Csrf-Token"})
@@ -328,12 +349,12 @@ def submit_solution(payload: dict, db: Session = Depends(get_db)):
             span = soup.find("span", class_="csrf-token")
             if span:
                 csrf_token = span.get("data-csrf")
-                
+
         if not csrf_token:
             raise Exception("未能在页面中提取到 CSRF 安全 Token，可能受到防火墙拦截或页面结构改变，请重试！")
-            
+
         logger.info(f"Successfully retrieved CSRF Token. Submitting solution code...")
-        
+
         # STEP B: POST Solution Code
         post_data = {
             "csrf_token": csrf_token,
@@ -344,13 +365,13 @@ def submit_solution(payload: dict, db: Session = Depends(get_db)):
             "tabSize": 4,
             "sourceFile": ""
         }
-        
+
         response_post = session.post(post_url, data=post_data, timeout=15.0)
-        
+
         # If it redirected to a page that is not contest or gym (e.g. home page due to logout)
         if "contest" not in response_post.url and "gym" not in response_post.url:
             raise Exception("Codeforces 拒绝了提交，可能是登录 Cookie 已失效，导致提交时会话被强制退出。请重新录入有效 Cookie。")
-            
+
         # If the final response URL is still the submit page, it indicates a warning/error (like identical code)
         if "submit" in response_post.url:
             post_soup = BeautifulSoup(response_post.text, "html.parser")
@@ -361,9 +382,9 @@ def submit_solution(payload: dict, db: Session = Depends(get_db)):
                 raise Exception(f"Codeforces 官网拒绝了您的提交：{err_txt}")
             else:
                 raise Exception("Codeforces 拒绝了提交，可能是语言类型选择错误或代码与上一发完全相同。")
-                
+
         logger.info("Submission POST complete. Querying recent submissions via public API to find Submission ID...")
-        
+
         # STEP C: Poll user.status API in a retry loop to find the newly registered Submission ID
         # Codeforces API can take 3-5 seconds to register a new submission. We poll up to 5 times (1.5s interval).
         submission_id = None
@@ -387,7 +408,7 @@ def submit_solution(payload: dict, db: Session = Depends(get_db)):
                     break
             except Exception as poll_err:
                 logger.warning(f"Submission ID polling warning: {str(poll_err)}")
-                
+
         if submission_id:
             logger.info(f"Successfully matched Submission ID: {submission_id}")
             return {
@@ -395,14 +416,14 @@ def submit_solution(payload: dict, db: Session = Depends(get_db)):
                 "message": "代码已成功代提交至 Codeforces！正在为您实时监控评测进度...",
                 "submission_id": submission_id
             }
-                        
+
         # If API poll fails, return general success but warn user
         return {
             "status": "partial_success",
             "message": "代码已成功提交，但由于 Codeforces 官方 API 响应延迟，未能即时同步出评测 ID，请登录官网查看结果。",
             "submission_id": None
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to submit solution: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -415,15 +436,15 @@ def check_submission_verdict(submission_id: int, db: Session = Depends(get_db)):
     config = db.query(SystemConfig).filter(SystemConfig.id == 1).first()
     if not config or not config.cf_handle:
         raise HTTPException(status_code=400, detail="用户名未配置")
-        
+
     cf_handle = config.cf_handle.strip()
     api_url = f"https://codeforces.com/api/user.status?handle={cf_handle}&from=1&count=20"
-    
+
     try:
         response = requests.get(api_url, timeout=10.0, headers={"User-Agent": "Mozilla/5.0"})
         if response.status_code != 200:
             raise Exception("API connection failed")
-            
+
         data = response.json()
         if data.get("status") == "OK":
             submissions = data.get("result", [])
@@ -459,10 +480,10 @@ def get_cached_problems(db: Session = Depends(get_db)):
     ).order_by(
         CachedProblem.created_at.desc()
     ).all()
-    
+
     # Fetch user solved status map
     status_map = get_user_solved_status_map(db)
-    
+
     results = []
     for p, rating in cached_list:
         prob_key = f"{p.contest_id}_{p.index.strip().upper()}"
@@ -491,31 +512,16 @@ def delete_cached_problem(contest_id: int, index: str, db: Session = Depends(get
     db.commit()
     return {"status": "success", "message": "已成功清除该题目的本地缓存"}
 
-_user_status_cache = {
-    "handle": None,
-    "last_fetched": 0,
-    "status_map": {}  # Key: "contestId_index" -> "OK" / "FAILED"
-}
 
-def get_user_solved_status_map(db: Session) -> dict:
-    global _user_status_cache
-    
-    config = db.query(SystemConfig).filter(SystemConfig.id == 1).first()
-    if not config or not config.cf_handle:
-        return {}
-        
-    handle = config.cf_handle.strip()
-    if not handle:
-        return {}
-        
-    current_time = time.time()
-    # Cache valid for 30 seconds
-    if _user_status_cache["handle"] == handle and (current_time - _user_status_cache["last_fetched"]) < 30:
-        return _user_status_cache["status_map"]
-        
+_status_sync_lock = threading.Lock()
+_is_syncing_status = False
+
+def _bg_fetch_user_status(handle: str):
+    global _user_status_cache, _is_syncing_status
     url = f"https://codeforces.com/api/user.status?handle={handle}&from=1&count=10000"
+    error_msg = None
     try:
-        logger.info(f"Fetching Codeforces submissions history for user {handle}...")
+        logger.info(f"Background fetching Codeforces submissions history for user {handle}...")
         response = requests.get(url, timeout=10.0, headers={"User-Agent": "Mozilla/5.0"})
         if response.status_code == 200:
             data = response.json()
@@ -528,7 +534,7 @@ def get_user_solved_status_map(db: Session) -> dict:
                     prob = s.get("problem", {})
                     index = prob.get("index")
                     verdict = s.get("verdict")
-                    
+
                     if contest_id and index:
                         key = f"{contest_id}_{index.upper()}"
                         if verdict == "OK":
@@ -536,19 +542,146 @@ def get_user_solved_status_map(db: Session) -> dict:
                         else:
                             if status_map.get(key) != "OK":
                                 status_map[key] = "FAILED"
-                                
-                _user_status_cache["handle"] = handle
-                _user_status_cache["last_fetched"] = current_time
-                _user_status_cache["status_map"] = status_map
-                logger.info(f"User solved status cache updated for {handle}. Found {len(status_map)} unique problems.")
-                return status_map
+
+                new_cache = {
+                    "handle": handle,
+                    "last_fetched": time.time(),
+                    "status_map": status_map,
+                    "last_error": None,
+                    "status": "success"
+                }
+                with _user_status_cache_lock:
+                    _user_status_cache = new_cache
+                logger.info(f"Background user solved status cache updated for {handle}. Found {len(status_map)} unique problems.")
+            else:
+                error_msg = data.get("comment", "API returned non-OK status")
+        else:
+            error_msg = f"HTTP Error {response.status_code}"
     except Exception as e:
-        logger.error(f"Error fetching user solved status from Codeforces API: {str(e)}")
-        if _user_status_cache["handle"] == handle:
-            logger.info("Using expired user solved status cache as safety fallback.")
-            return _user_status_cache["status_map"]
-            
+        error_msg = str(e)
+
+    if error_msg:
+        logger.error(f"Background error fetching user solved status from Codeforces API: {error_msg}")
+        with _user_status_cache_lock:
+            # Retain previous status_map as fallback
+            prev_status_map = _user_status_cache.get("status_map", {}) if _user_status_cache.get("handle") == handle else {}
+            new_cache = {
+                "handle": handle,
+                "last_fetched": time.time(),
+                "status_map": prev_status_map,
+                "last_error": error_msg,
+                "status": "failed"
+            }
+            _user_status_cache = new_cache
+
+    with _status_sync_lock:
+        _is_syncing_status = False
+
+def get_user_solved_status_map(db: Session) -> dict:
+    global _user_status_cache, _is_syncing_status
+
+    config = db.query(SystemConfig).filter(SystemConfig.id == 1).first()
+    if not config or not config.cf_handle:
+        return {}
+
+    handle = config.cf_handle.strip()
+    if not handle:
+        return {}
+
+    current_time = time.time()
+
+    with _user_status_cache_lock:
+        cache = _user_status_cache
+
+    is_handle_changed = (cache.get("handle") != handle)
+    is_expired = (current_time - cache.get("last_fetched", 0)) >= 300  # 5 minutes TTL
+
+    if (is_handle_changed or is_expired) and not _is_syncing_status:
+        with _status_sync_lock:
+            if not _is_syncing_status:
+                _is_syncing_status = True
+                t = threading.Thread(target=_bg_fetch_user_status, args=(handle,))
+                t.daemon = True
+                t.start()
+
+    if cache.get("handle") == handle:
+        return cache.get("status_map", {})
+
     return {}
+
+# --- Codeforces Solved Status Async Sync Info Endpoints ---
+
+@app.get("/api/user/status-sync")
+def get_status_sync_info(db: Session = Depends(get_db)):
+    global _user_status_cache, _is_syncing_status
+    config = db.query(SystemConfig).filter(SystemConfig.id == 1).first()
+    handle = config.cf_handle.strip() if (config and config.cf_handle) else ""
+
+    if not handle:
+        return {
+            "handle": "",
+            "syncing": False,
+            "last_fetched": 0,
+            "problem_count": 0,
+            "record_count": 0,
+            "accepted_count": 0,
+            "failed_count": 0,
+            "last_error": None,
+            "status": "pending"
+        }
+
+    with _user_status_cache_lock:
+        cache = _user_status_cache
+        is_syncing = _is_syncing_status
+
+    if cache.get("handle") == handle:
+        status_map = cache.get("status_map", {})
+        record_count = len(status_map)
+        accepted_count = sum(1 for v in status_map.values() if v == "OK")
+        failed_count = sum(1 for v in status_map.values() if v == "FAILED")
+        return {
+            "handle": handle,
+            "syncing": is_syncing,
+            "last_fetched": cache.get("last_fetched", 0),
+            "problem_count": record_count,
+            "record_count": record_count,
+            "accepted_count": accepted_count,
+            "failed_count": failed_count,
+            "last_error": cache.get("last_error"),
+            "status": cache.get("status", "pending")
+        }
+    else:
+        return {
+            "handle": handle,
+            "syncing": is_syncing,
+            "last_fetched": 0,
+            "problem_count": 0,
+            "record_count": 0,
+            "accepted_count": 0,
+            "failed_count": 0,
+            "last_error": None,
+            "status": "pending"
+        }
+
+@app.post("/api/user/status-sync")
+def trigger_status_sync(db: Session = Depends(get_db)):
+    global _user_status_cache, _is_syncing_status
+    config = db.query(SystemConfig).filter(SystemConfig.id == 1).first()
+    if not config or not config.cf_handle:
+        raise HTTPException(status_code=400, detail="未配置 Codeforces Handle")
+
+    handle = config.cf_handle.strip()
+    if not handle:
+        raise HTTPException(status_code=400, detail="Codeforces Handle 不能为空")
+
+    with _status_sync_lock:
+        if not _is_syncing_status:
+            _is_syncing_status = True
+            t = threading.Thread(target=_bg_fetch_user_status, args=(handle,))
+            t.daemon = True
+            t.start()
+
+    return {"status": "success", "message": "已在后台启动 AC 状态同步"}
 
 # --- Problemset Library Endpoints ---
 
@@ -556,41 +689,41 @@ def get_user_solved_status_map(db: Session) -> dict:
 def sync_problemset_library(db: Session = Depends(get_db)):
     cf_url = "https://codeforces.com/api/problemset.problems"
     logger.info("Syncing Codeforces problemset list to SQLite...")
-    
+
     try:
         response = requests.get(cf_url, timeout=30.0, headers={"User-Agent": "Mozilla/5.0"})
         if response.status_code != 200:
             raise Exception(f"CF API HTTP Status: {response.status_code}")
-            
+
         data = response.json()
         if data.get("status") != "OK":
             raise Exception(f"CF API error: {data.get('comment', 'Unknown')}")
-            
+
         result = data.get("result", {})
         problems = result.get("problems", [])
         statistics = result.get("problemStatistics", [])
-        
+
         stats_map = {}
         for s in statistics:
             cid = s.get("contestId")
             idx = s.get("index")
             if cid and idx:
                 stats_map[f"{cid}_{idx}"] = s.get("solvedCount", 0)
-                
+
         mappings = []
         for p in problems:
             cid = p.get("contestId")
             idx = p.get("index")
             name = p.get("name", "Unknown Problem")
-            
+
             if not cid or not idx:
                 continue
-                
+
             pid = f"{cid}_{idx}"
             rating = p.get("rating")
             solved_count = stats_map.get(pid, 0)
             tags = p.get("tags", [])
-            
+
             mappings.append({
                 "id": pid,
                 "contest_id": cid,
@@ -600,7 +733,7 @@ def sync_problemset_library(db: Session = Depends(get_db)):
                 "solved_count": solved_count,
                 "tags_json": json.dumps(tags)
             })
-            
+
         try:
             db.query(ProblemsetLibrary).delete()
             db.bulk_insert_mappings(ProblemsetLibrary, mappings)
@@ -610,7 +743,7 @@ def sync_problemset_library(db: Session = Depends(get_db)):
             raise db_err
         logger.info(f"Sync complete. Cached {len(mappings)} problems locally.")
         return {"status": "success", "count": len(mappings)}
-        
+
     except Exception as e:
         logger.error(f"Error syncing problemset: {str(e)}")
         raise HTTPException(status_code=500, detail=f"同步官方题库失败，错误详情: {str(e)}")
@@ -631,9 +764,9 @@ def get_problems(
     if count == 0:
         logger.info("Local problem library is empty. Auto-triggering sync...")
         sync_problemset_library(db)
-        
+
     query_obj = db.query(ProblemsetLibrary)
-    
+
     if query:
         q = f"%{query.strip()}%"
         if query.strip().isdigit():
@@ -646,17 +779,17 @@ def get_problems(
                 (ProblemsetLibrary.name.ilike(q)) |
                 (ProblemsetLibrary.id.ilike(q))
             )
-            
+
     if tag:
         query_obj = query_obj.filter(ProblemsetLibrary.tags_json.like(f'%"{tag.strip()}"%'))
-        
+
     if min_rating is not None:
         query_obj = query_obj.filter(ProblemsetLibrary.rating >= min_rating)
     if max_rating is not None:
         query_obj = query_obj.filter(ProblemsetLibrary.rating <= max_rating)
-        
+
     total = query_obj.count()
-    
+
     # Rating sorting or default newest contest ordering
     if sort_by == "rating":
         if sort_order == "desc":
@@ -678,18 +811,18 @@ def get_problems(
             ProblemsetLibrary.contest_id.desc(),
             ProblemsetLibrary.index.asc()
         )
-        
+
     problems_list = query_obj.offset((page - 1) * limit).limit(limit).all()
-    
+
     # Fetch user solved status map
     status_map = get_user_solved_status_map(db)
-    
+
     # Fetch cached status for these problems in a single optimized query
     page_problem_ids = [p.id for p in problems_list]
     cached_ids = set(
         r[0] for r in db.query(CachedProblem.id).filter(CachedProblem.id.in_(page_problem_ids)).all()
     )
-    
+
     problems_mapped = []
     for p in problems_list:
         problems_mapped.append({
@@ -703,7 +836,7 @@ def get_problems(
             "solved_status": status_map.get(p.id, "NONE"),
             "is_cached": p.id in cached_ids
         })
-        
+
     return {
         "status": "success",
         "total": total,
@@ -733,15 +866,15 @@ def get_contests(db: Session = Depends(get_db)):
                 }
             except Exception as e:
                 logger.error(f"Error parsing local contest cache: {str(e)}")
-    
+
     # 2. Cache miss or expired, fetch from Codeforces
     logger.info("Local contest cache miss or expired. Fetching from Codeforces API...")
     cf_url = "https://codeforces.com/api/contest.list?gym=false"
-    
+
     fetch_success = False
     upcoming = []
     finished = []
-    
+
     try:
         response = requests.get(cf_url, timeout=10.0, headers={"User-Agent": "Mozilla/5.0"})
         if response.status_code == 200:
@@ -750,7 +883,7 @@ def get_contests(db: Session = Depends(get_db)):
                 contests = data.get("result", [])
                 upcoming = [c for c in contests if c.get("phase") in ("BEFORE", "CODING")]
                 finished = [c for c in contests if c.get("phase") not in ("BEFORE", "CODING")]
-                
+
                 upcoming = sorted(upcoming, key=lambda x: x.get("startTimeSeconds", 0))
                 finished = sorted(finished, key=lambda x: x.get("startTimeSeconds", 0), reverse=True)
                 fetch_success = True
@@ -758,14 +891,14 @@ def get_contests(db: Session = Depends(get_db)):
             logger.warning(f"Failed to fetch contests from CF. HTTP Status: {response.status_code}")
     except Exception as e:
         logger.error(f"Network error fetching contests from Codeforces: {str(e)}")
-        
+
     if fetch_success:
         # 3. Save new data to database cache
         try:
             # Delete existing
             db.query(ContestCache).filter(ContestCache.id == 1).delete()
             db.commit()
-            
+
             # Save new
             new_cache = ContestCache(
                 id=1,
@@ -777,7 +910,7 @@ def get_contests(db: Session = Depends(get_db)):
             logger.info("Successfully updated local SQLite contest cache.")
         except Exception as cache_err:
             logger.error(f"Error writing contest cache to database: {str(cache_err)}")
-            
+
         return {
             "status": "success",
             "upcoming": upcoming,
@@ -798,7 +931,7 @@ def get_contests(db: Session = Depends(get_db)):
                 }
             except Exception:
                 pass
-                
+
         # 5. Last resort fallback to mock data
         logger.warning("No cache available and CF is offline. Serving mock fallback!")
         return {
@@ -824,10 +957,10 @@ def get_contest_problems(contest_id: int, db: Session = Depends(get_db)):
        without extra parameters (like from/count), which is slow (~3s) but guaranteed.
     """
     logger.info(f"Fetching problem list for contest {contest_id}...")
-    
+
     # Get user solved status map
     status_map = get_user_solved_status_map(db)
-    
+
     # Step 1: Check local database (ProblemsetLibrary)
     try:
         local_probs = db.query(ProblemsetLibrary).filter(ProblemsetLibrary.contest_id == contest_id).all()
@@ -845,7 +978,7 @@ def get_contest_problems(contest_id: int, db: Session = Depends(get_db)):
                             break
                 except Exception:
                     pass
-            
+
             # Sort problems naturally by index (e.g. A, B, C1, C2...)
             sorted_probs = sorted(local_probs, key=lambda x: x.index)
             return {
@@ -871,7 +1004,7 @@ def get_contest_problems(contest_id: int, db: Session = Depends(get_db)):
             }
     except Exception as db_err:
         logger.error(f"Error querying local DB for contest problems: {str(db_err)}")
-    
+
     # Step 2: Fallback to scraping the mirror contest page
     mirror_url = f"https://mirror.codeforces.com/contest/{contest_id}?locale=en"
     headers = {
@@ -902,7 +1035,7 @@ def get_contest_problems(contest_id: int, db: Session = Depends(get_db)):
                             "tags": [],
                             "solved_status": status_map.get(f"{contest_id}_{idx.upper()}", "NONE")
                         })
-                
+
                 # Extract contest name from title
                 contest_name = f"Contest {contest_id}"
                 title_tag = soup.title
@@ -912,7 +1045,7 @@ def get_contest_problems(contest_id: int, db: Session = Depends(get_db)):
                         contest_name = title_str[len("Dashboard - "):]
                         if contest_name.endswith(" - Codeforces"):
                             contest_name = contest_name[:-len(" - Codeforces")]
-                
+
                 logger.info(f"Successfully scraped problems from mirror page. Count: {len(problems)}")
                 return {
                     "status": "success",
@@ -926,7 +1059,7 @@ def get_contest_problems(contest_id: int, db: Session = Depends(get_db)):
                 }
     except Exception as scrap_err:
         logger.error(f"Failed to scrape mirror contest page: {str(scrap_err)}")
-        
+
     # Step 3: Fallback to the official standings API without parameters
     # (This is 8.4MB but guaranteed to work)
     cf_standings_url = f"https://codeforces.com/api/contest.standings?contestId={contest_id}"
@@ -939,7 +1072,7 @@ def get_contest_problems(contest_id: int, db: Session = Depends(get_db)):
                 result = data.get("result", {})
                 problems = result.get("problems", [])
                 contest = result.get("contest", {})
-                
+
                 logger.info(f"Successfully fetched problems from standings API. Count: {len(problems)}")
                 return {
                     "status": "success",
@@ -964,7 +1097,7 @@ def get_contest_problems(contest_id: int, db: Session = Depends(get_db)):
                 }
     except Exception as api_err:
         logger.error(f"Failed to fetch from official standings API: {str(api_err)}")
-        
+
     # If all else fails
     raise HTTPException(status_code=500, detail="无法获取该比赛的题目列表，请检查网络或稍后重试。")
 
@@ -979,7 +1112,7 @@ active_translations_lock = Lock()
 def get_problem(contest_id: int, index: str, force_refresh: bool = False, db: Session = Depends(get_db)):
     index_upper = index.strip().upper()
     problem_id = f"{contest_id}_{index_upper}"
-    
+
     # 1. Quick check cache first without lock
     if not force_refresh:
         cached = db.query(CachedProblem).filter(CachedProblem.id == problem_id).first()
@@ -1009,13 +1142,13 @@ def get_problem(contest_id: int, index: str, force_refresh: bool = False, db: Se
                     "note_html": heal_latex_colors(cached.translated_note_html),
                 }
             }
-            
+
     # 2. Acquire or create a lock for this specific problem_id to prevent parallel race condition
     with active_translations_lock:
         if problem_id not in active_translations:
             active_translations[problem_id] = Lock()
         problem_lock = active_translations[problem_id]
-        
+
     with problem_lock:
         try:
             # Double-check cache inside lock (in case another thread just completed it)
@@ -1047,7 +1180,7 @@ def get_problem(contest_id: int, index: str, force_refresh: bool = False, db: Se
                             "note_html": heal_latex_colors(cached.translated_note_html),
                         }
                     }
-                    
+
             # Cache miss - proceed to scrape and translate
             logger.info(f"Cache miss for problem (executing translation): {problem_id}")
             try:
@@ -1055,9 +1188,9 @@ def get_problem(contest_id: int, index: str, force_refresh: bool = False, db: Se
             except Exception as e:
                 logger.error(f"Scraping failed: {str(e)}")
                 raise HTTPException(status_code=404, detail=f"无法从 Codeforces 获取该题目。详情: {str(e)}")
-                
+
             translated_data = translate_problem(scraped_data, db)
-            
+
             # Save to Cache ONLY if it's not a mock fallback!
             is_mock = translated_data.get("is_mock", False)
             if not is_mock:
@@ -1065,7 +1198,7 @@ def get_problem(contest_id: int, index: str, force_refresh: bool = False, db: Se
                 if existing:
                     db.delete(existing)
                     db.commit()
-                    
+
                 new_cache = CachedProblem(
                     id=problem_id,
                     contest_id=contest_id,
@@ -1086,10 +1219,10 @@ def get_problem(contest_id: int, index: str, force_refresh: bool = False, db: Se
                     translated_output_spec_html=translated_data["translated_output_spec_html"],
                     translated_note_html=translated_data["translated_note_html"]
                 )
-                
+
                 db.add(new_cache)
                 db.commit()
-                
+
             return {
                 "status": "success",
                 "source": "mock" if is_mock else "network",

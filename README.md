@@ -1,15 +1,15 @@
 # Codeforces AI 智能双语翻译镜像站 (Premium Mirror)
 
 > [!CAUTION]
-> **🔒 本地自用安全警告与凭据保护提示 (Security & Credentials Warning)**  
-> 本系统为**本地自用设计**，您在“管理后台”录入的 Codeforces Handle、登录 Cookie 以及大模型 API Key 均以明文安全保存在本地 SQLite 数据库 `backend/cf_mirror.db` 中。  
-> - **切勿将包含您真实私密数据的 `backend/cf_mirror.db` 文件分享或提交至 GitHub 等任何公开仓库！**  
-> - **切勿与他人分享您的 `cf_mirror.db` 数据库文件！**  
+> **🔒 本地自用安全警告与凭据保护提示 (Security & Credentials Warning)**
+> 本系统为**本地自用设计**，您在“管理后台”录入的 Codeforces Handle、登录 Cookie 以及大模型 API Key 均以明文安全保存在本地 SQLite 数据库 `backend/cf_mirror.db` 中。
+> - **切勿将包含您真实私密数据的 `backend/cf_mirror.db` 文件分享或提交至 GitHub 等任何公开仓库！**
+> - **切勿与他人分享您的 `cf_mirror.db` 数据库文件！**
 > - 本项目的 `.gitignore` 已预置安全防御规则自动拦截 `.db` 和 `.log` 文件，请务必保持防御配置开启，时刻保障个人账号资产安全。
 
 ---
 
-这是一个为算法竞赛选手量身定制的 Codeforces 双语对照阅读与安全直交镜像系统。通过结合轻量级网页爬虫、大模型多路容灾翻译引擎、React 协调隔离渲染技术以及本地缓存防抖机制，本系统能让您在本地电脑上享受极致流畅、小说般舒适的中文刷题与评测体验。
+这是一个为算法竞赛选手量身定制的 Codeforces 双语对照阅读与状态同步系统。通过结合轻量级网页爬虫、大模型多路容灾翻译引擎、React 协调隔离渲染技术以及本地缓存防抖机制，本系统能让您在本地电脑上享受极致流畅、小说般舒适的中文刷题体验。
 
 ---
 
@@ -19,14 +19,15 @@
 
 ```mermaid
 graph TD
-    A["Vite + React + TS 前端"] -->|API 请求与提交代码| B["FastAPI 本地服务器"]
+    A["Vite + React + TS 前端"] -->|API 请求| B["FastAPI 本地服务器"]
     B -->|1. 检查缓存 - 5ms| C[("SQLite 本地数据库")]
     B -->|2. 抓取题面 - 爬虫与容灾| D["Codeforces 官网/镜像站"]
     B -->|3. 翻译引擎 - 多路链式回退| E["OpenAI / 各种大模型 API"]
     C -->|缓存命中| A
     D -->|解析 HTML 并缓存| C
     E -->|格式化中文并缓存| C
-    B -->|直接安全代提交| D
+    B -->|同步做题/AC 状态| D
+    A -->|跳转官网提交| D
 ```
 
 1. **LaTeX 语法保护与爬虫模块 (`scraper.py`)**：
@@ -35,7 +36,7 @@ graph TD
 
 2. **React Memo 隔离与 MathJax 3 渲染系统 (`ProblemViewer.tsx`)**：
    - **协调隔离（Memoization）**：为了彻底解决 React 虚拟 DOM 协调时将外部数学公式打回原形的问题，本系统将所有渲染的数学公式隔离在受 `React.memo` 保护的 `ProblemContent` 子组件中。即使您在主页面打字写代码、切换编译器或轮询评测，渲染后的公式也绝不会发生闪烁与退化。
-   - **双 CDN 容灾**：前端内置 BootCDN 极速加载，并配有 cdnjs (Cloudflare) 自动无缝 Failover 容灾加载机制。
+   - **本地离线加载**：本地集成并版本控制了 MathJax 3 (包含 `color` 扩展)，无需外部互联网，完全本地离线加载并渲染 SVG 格式公式，保障极速、稳定的渲染体验。
 
 3. **大模型多路容灾翻译链 (`translator.py`)**：
    - 允许用户在管理后台配置多组 LLM 模型节点（如 DeepSeek, GPT, Claude 等）。
@@ -80,16 +81,16 @@ CF/
 │   │   ├── index.css         # Harmonious Premium CSS 设计系统
 │   │   ├── main.tsx
 │   │   ├── ProblemsetLibrary.tsx # 官方 30000+ 题库快速检索面板
-│   │   └── ProblemViewer.tsx # 双语对照阅读器与直接安全提交组件 (Memo)
+│   │   └── ProblemViewer.tsx # 双语对照阅读器与状态同步组件 (Memo)
 │   ├── eslint.config.js
-│   ├── index.html            # MathJax 3 配置与双路 CDN 加载 failover
+│   ├── index.html            # MathJax 3 配置与本地加载
 │   ├── package.json          # 前端依赖与脚手架指令
 │   ├── tsconfig.json         # TypeScript 编译配置
 │   └── vite.config.ts        # Vite 打包配置
 │
 ├── .gitignore                # 仓库级别防污染 Git 忽略清单
 ├── README.md                 # 软件工程系统架构与运维手册
-├── start.py                  # 一键重定向 Conda 极速启动与热重载监测管理脚本
+├── start.py                  # 一键创建 Python 虚拟环境与前后端启动热重载监测管理脚本
 └── scratch_test.py           # 临时系统检测沙盒脚本
 ```
 
@@ -98,19 +99,18 @@ CF/
 ## 🚀 极速上手说明 (Quick Start)
 
 ### 1. Windows 一键启动 (最推荐)
-如果您是 Windows 用户，无需任何前置安装，直接在项目根目录下双击运行：
+请确保您的 Windows 系统已提前安装好 Python 3.8+ 与 Node.js/npm，然后直接在项目根目录下双击运行：
 * **`一键启动.bat`**
 
-**该启动引导器会自动：**
-1. 检测系统是否安装了 Python 3.8+。若未检测到，将通过 Windows `winget` 自动为您安全静默安装 Python 3.11。
-2. 检测并自动修复 `pip` 包管理器。如果缺失，会自动从官方下载并配置好。
-3. 检测系统是否安装了 Node.js / npm 环境。若缺失，将自动为您下载并安装最新 Node.js LTS 版本。
-4. 调用底层的 `start.py` 核心引导程序：
-   - 自动检测并创建 **Python 官方自带的虚拟环境 (`.venv`)**。
-   - 自动在虚拟环境中补全安装后端所有 Python 依赖包。
-   - 自动使用国内淘宝极速镜像源补全安装前端所有 npm 依赖包。
-   - 自动检测并占用释放本地 `8000` 与 `5173` 端口。
-   - 自动拉起后端服务器与前端应用，并在默认浏览器中为您**秒开加载**主界面！
+**启动说明：**
+双击 `一键启动.bat` 将调用底层的 `start.py` 核心引导程序。该程序在本地运行时会自动：
+1. 检测并自动创建 **Python 官方自带的虚拟环境 (`.venv`)**。
+2. 自动在虚拟环境中安装后端所有需要的 Python 依赖包。
+3. 检查前端 `node_modules`，如果不存在则自动执行 `npm install` 补全安装所有前端依赖。
+4. 自动检测并释放本地被占用的 `8000` 与 `5173` 端口。
+5. 启动后端服务器与前端开发服务，并在默认浏览器中为您打开主界面！
+
+*注意：系统需要您提前在本地自行安装好 Python 和 Node.js 环境，`start.py` 不会自动安装系统级别的 Python/Node.js，也不包含 winget 自动安装。*
 
 ---
 
@@ -124,16 +124,15 @@ python start.py
 
 ---
 
-## 🔒 直接提交登录 Cookie 的获取方式
+## 🔒 Codeforces 做题状态同步与高级设置
 
-为了使用系统中最酷炫的“直接向 Codeforces 官网安全代提交并轮询评测”功能，您需要前往镜像后台填入 `Cookie`：
-1. 打开浏览器登录 [Codeforces 官网](https://codeforces.com)。
-2. 按 `F12` 打开开发者工具，切换到 `Application (应用)` -> `Cookies`。
-3. 复制对应的 `Value` 字符串（或把 `Network` 请求头中的整个 `Cookie: ...` 字段完整复制）。
-4. 粘贴到本地镜像站的 **「管理后台 (设置)」** 中保存，即可解锁无需切回官网、在此直接提交代码的流畅快感！
+为了在本地镜像站自动同步并显示您在 Codeforces 的做题记录 (AC/FAILED 状态标记)：
+1. 您只需要前往镜像站的 **「管理后台 (设置)」** 中录入您的 **Codeforces 用户名 (Handle)**，即可立刻开启极速异步状态同步。AC 状态同步完全由公共接口拉取，**不需要提供任何密码或 Cookie 凭据**，保障您的账号资产安全！
+2. 浏览器登录 Cookies 仅作为高级/保留功能折叠在后台设置中（用于未来代理提交等用途，目前代理提交功能默认在后端关闭，即 `ENABLE_CF_PROXY_SUBMIT` 默认为空）。如无特殊需要，建议保持留空即可。
 
 ---
 
 ## 🛡️ 软件维护与排错
-- **公式加载不出来/慢？**：我们已引入 BootCDN (国内闪电响应) 与 cdnjs 容灾，刷新页面即可自愈。
+- **公式加载？**：MathJax 静态资源已完全保存在本地 `frontend/public/` 目录下，100% 本地极速加载，不依赖任何外部 CDN，且内置白名单 HTML 清洗过滤以确保公式安全渲染。
+- **系统关闭？**：双击运行根目录下的 `一键关闭.bat` 即可。该脚本会使用 PowerShell 严格验证监听 `8000` (后端) 和 `5173` (前端) 端口进程的命令行信息，**必须匹配本项目根目录路径**且包含 `uvicorn`/`node`/`npm`/`vite`/`python` 特征的进程才会执行关闭，绝不会误杀其他无关的应用程序。
 - **系统报错？**：可直接打开 `backend/backend_app.log` 文本文件。全链路中间件已将所有的 API 延迟毫秒数与 500 Stacktrace 记录其中，像飞机黑匣子一样清晰好找！

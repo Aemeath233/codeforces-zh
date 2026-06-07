@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { LayoutDashboard, Languages, Settings, GraduationCap, X, AlertCircle, History } from 'lucide-react';
 import { Dashboard } from './Dashboard';
 import { ProblemsetLibrary } from './ProblemsetLibrary';
@@ -35,6 +35,51 @@ export const App: React.FC = () => {
   });
   const [isLoadingProblem, setIsLoadingProblem] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [acSyncStatus, setAcSyncStatus] = useState<{
+    handle: string;
+    syncing: boolean;
+    last_fetched: number;
+    problem_count: number;
+    record_count?: number;
+    accepted_count?: number;
+    failed_count?: number;
+    last_error?: string | null;
+    status?: string;
+  } | null>(null);
+  const [acSyncTrigger, setAcSyncTrigger] = useState(0);
+
+  const lastSyncSignatureRef = useRef<string>('');
+  const isSyncActiveRef = useRef<boolean>(false);
+
+  // Function to display global Toast notifications
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { message, type, id }]);
+
+    // Automatically clear toast after 3.5 seconds
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3500);
+  }, []);
+
+  const showSyncOutcomeToast = useCallback((status: {
+    last_error?: string | null;
+    record_count?: number;
+    accepted_count?: number;
+    failed_count?: number;
+    problem_count: number;
+  }) => {
+    const accepted = status.accepted_count || 0;
+    const failed = status.failed_count || 0;
+    const record = status.record_count || 0;
+    if (status.last_error) {
+      showToast(`❌ 做题状态同步失败: ${status.last_error}`, 'error');
+    } else if (record === 0) {
+      showToast('Codeforces 做题状态同步完成，暂无记录。', 'success');
+    } else {
+      showToast(`🎉 做题状态同步完成！(AC ${accepted} 题 / 尝试未过 ${failed} 题 / 共 ${record} 条记录)`, 'success');
+    }
+  }, [showToast]);
 
   // Batch translation queue state (lifted up for persistence across unmounts)
   const [batchQueue, setBatchQueue] = useState<{
@@ -53,7 +98,7 @@ export const App: React.FC = () => {
     timerCountdown: 0
   });
 
-  const cancelBatchRef = React.useRef(false);
+  const cancelBatchRef = useRef(false);
 
   // Start the background batch translation loop
   const handleStartBatchTranslation = async (selectedProblems: Problem[]) => {
@@ -105,7 +150,7 @@ export const App: React.FC = () => {
           if (!response.ok) {
             throw new Error('翻译接口返回异常');
           }
-          
+
           const data = await response.json();
           // Check if the source is served from local cache
           if (data.source === 'cache') {
@@ -125,7 +170,7 @@ export const App: React.FC = () => {
           showToast(`题目 ${p.contest_id}${p.index} 预翻译失败，已跳过。`, 'error');
         }
       }
-      
+
       // If there are more problems, start a 60-second countdown (only if it wasn't cached)
       if (i < selectedProblems.length - 1) {
         if (cancelBatchRef.current) break;
@@ -181,7 +226,7 @@ export const App: React.FC = () => {
     } else {
       showToast('批量翻译任务已手动取消。', 'error');
     }
-    
+
     setBatchQueue({
       isActive: false,
       total: 0,
@@ -201,6 +246,95 @@ export const App: React.FC = () => {
     }));
   };
 
+  const fetchAcSyncStatus = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/user/status-sync`);
+      if (response.ok) {
+        const data = await response.json();
+        setAcSyncStatus(data);
+        if (data) {
+          const sig = `${data.handle}:${data.last_fetched}:${data.status}:${data.record_count || 0}:${data.accepted_count || 0}:${data.failed_count || 0}:${data.last_error || ''}`;
+
+          if (data.syncing) {
+            isSyncActiveRef.current = true;
+          }
+
+          if (!data.syncing && isSyncActiveRef.current) {
+            isSyncActiveRef.current = false;
+            showSyncOutcomeToast(data);
+          }
+
+          if (!data.syncing && data.last_fetched > 0 && lastSyncSignatureRef.current && lastSyncSignatureRef.current !== sig) {
+            console.log(`Sync signature changed from "${lastSyncSignatureRef.current}" to "${sig}". Triggering page refresh.`);
+            setAcSyncTrigger(prev => prev + 1);
+          }
+
+          lastSyncSignatureRef.current = sig;
+        }
+        return data;
+      }
+    } catch (e) {
+      console.error('Failed to fetch AC sync status:', e);
+    }
+    return null;
+  }, [showSyncOutcomeToast]);
+
+  const handleTriggerAcSync = async () => {
+    if (acSyncStatus?.syncing) return;
+    try {
+      const response = await fetch(`${API_BASE}/api/user/status-sync`, { method: 'POST' });
+      if (response.ok) {
+        showToast('正在后台向 Codeforces 同步您的做题数据，请稍候...', 'success');
+        isSyncActiveRef.current = true;
+        setAcSyncStatus(prev => prev ? { ...prev, syncing: true } : { handle: '', syncing: true, last_fetched: 0, problem_count: 0 });
+        let attempts = 0;
+        const intervalId = window.setInterval(async () => {
+          attempts++;
+          const nextStatus = await fetchAcSyncStatus();
+          if ((nextStatus && !nextStatus.syncing) || attempts > 30) {
+            clearInterval(intervalId);
+          }
+        }, 2000);
+      } else {
+        const err = await response.json();
+        showToast(err.detail || '启动状态同步失败', 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('网络错误，启动状态同步失败', 'error');
+    }
+  };
+
+  useEffect(() => {
+    let intervalId: number | undefined;
+
+    const checkStatus = async () => {
+      const status = await fetchAcSyncStatus();
+      if (status && status.syncing) {
+        if (!intervalId) {
+          intervalId = window.setInterval(async () => {
+            const nextStatus = await fetchAcSyncStatus();
+            if (nextStatus && !nextStatus.syncing) {
+              if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = undefined;
+              }
+            }
+          }, 2000);
+        }
+      }
+    };
+
+    checkStatus();
+
+    const slowInterval = window.setInterval(checkStatus, 30000);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      clearInterval(slowInterval);
+    };
+  }, [fetchAcSyncStatus]);
+
   // Synchronize tab and problem states to localStorage
   React.useEffect(() => {
     localStorage.setItem('cf_active_tab', activeTab);
@@ -214,16 +348,7 @@ export const App: React.FC = () => {
     }
   }, [currentProblem]);
 
-  // Function to display global Toast notifications
-  const showToast = React.useCallback((message: string, type: 'success' | 'error' = 'success') => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { message, type, id }]);
-    
-    // Automatically clear toast after 3.5 seconds
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3500);
-  }, []);
+
 
   const removeToast = (id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -257,8 +382,10 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleRefreshCurrentProblem = () => {
-    if (currentProblem) {
+  const handleRefreshCurrentProblem = (newData?: ProblemData) => {
+    if (newData) {
+      setCurrentProblem(newData);
+    } else if (currentProblem) {
       handleFetchProblem(currentProblem.contest_id, currentProblem.index, false);
     }
   };
@@ -321,7 +448,7 @@ export const App: React.FC = () => {
 
         <div className="navbar-right">
           {batchQueue.isActive && (
-            <div 
+            <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -365,6 +492,62 @@ export const App: React.FC = () => {
               </button>
             </div>
           )}
+          {acSyncStatus && acSyncStatus.handle && (
+            <div
+              onClick={handleTriggerAcSync}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: acSyncStatus.syncing
+                  ? 'var(--warning-bg, rgba(245, 158, 11, 0.08))'
+                  : acSyncStatus.last_error
+                    ? 'rgba(239, 68, 68, 0.08)'
+                    : 'var(--success-bg, rgba(16, 185, 129, 0.08))',
+                color: acSyncStatus.syncing
+                  ? 'var(--warning, #f59e0b)'
+                  : acSyncStatus.last_error
+                    ? '#ef4444'
+                    : 'var(--success, #10b981)',
+                padding: '5px 12px',
+                borderRadius: '20px',
+                border: acSyncStatus.syncing
+                  ? '1px solid rgba(245, 158, 11, 0.15)'
+                  : acSyncStatus.last_error
+                    ? '1px solid rgba(239, 68, 68, 0.15)'
+                    : '1px solid rgba(16, 185, 129, 0.15)',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                cursor: acSyncStatus.syncing ? 'default' : 'pointer',
+                transition: 'all var(--transition-fast)',
+                userSelect: 'none'
+              }}
+              title={acSyncStatus.syncing
+                ? '做题状态同步中...'
+                : acSyncStatus.last_error
+                  ? `同步失败: ${acSyncStatus.last_error}。点击可重试同步。`
+                  : `最近同步时间: ${acSyncStatus.last_fetched > 0 ? new Date(acSyncStatus.last_fetched * 1000).toLocaleTimeString() : '无'}。点击可重新同步。`}
+            >
+              {acSyncStatus.syncing ? (
+                <>
+                  <div className="spinner" style={{ width: '12px', height: '12px', borderWidth: '2px', borderTopColor: 'var(--warning, #f59e0b)', animationDuration: '0.8s', flexShrink: 0 }}></div>
+                  <span>AC 同步中...</span>
+                </>
+              ) : acSyncStatus.last_error ? (
+                <>
+                  <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: '#ef4444', borderRadius: '50%' }}></span>
+                  <span>同步失败: {acSyncStatus.handle}</span>
+                  <span style={{ fontSize: '10px', opacity: 0.8 }}>🔄</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: 'var(--success, #10b981)', borderRadius: '50%' }}></span>
+                  <span>做题状态已同步: {acSyncStatus.handle} (AC {acSyncStatus.accepted_count || 0} / 尝试未过 {acSyncStatus.failed_count || 0} / 共 {acSyncStatus.record_count || 0} 条记录)</span>
+                  <span style={{ fontSize: '10px', opacity: 0.8 }}>🔄</span>
+                </>
+              )}
+            </div>
+          )}
           <div className="status-indicator">
             <span className="status-dot"></span>
             <span>本地镜像站已激活</span>
@@ -389,20 +572,21 @@ export const App: React.FC = () => {
 
         {/* Tab Routing */}
         {!isLoadingProblem && activeTab === 'dashboard' && (
-          <Dashboard onSearchProblem={handleFetchProblem} onShowToast={showToast} />
+          <Dashboard onSearchProblem={handleFetchProblem} onShowToast={showToast} acSyncTrigger={acSyncTrigger} />
         )}
 
         {!isLoadingProblem && activeTab === 'problemset' && (
-          <ProblemsetLibrary 
-            onSelectProblem={handleFetchProblem} 
-            onShowToast={showToast} 
+          <ProblemsetLibrary
+            onSelectProblem={handleFetchProblem}
+            onShowToast={showToast}
             batchQueue={batchQueue}
             onStartBatch={handleStartBatchTranslation}
+            acSyncTrigger={acSyncTrigger}
           />
         )}
 
         {!isLoadingProblem && activeTab === 'cached' && (
-          <CachedProblems onSelectProblem={handleFetchProblem} onShowToast={showToast} />
+          <CachedProblems onSelectProblem={handleFetchProblem} onShowToast={showToast} acSyncTrigger={acSyncTrigger} />
         )}
 
         {!isLoadingProblem && activeTab === 'problem' && currentProblem && (
@@ -414,7 +598,7 @@ export const App: React.FC = () => {
         )}
 
         {!isLoadingProblem && activeTab === 'settings' && (
-          <AdminSettings onShowToast={showToast} />
+          <AdminSettings onShowToast={showToast} onUserConfigSaved={handleTriggerAcSync} />
         )}
       </main>
 

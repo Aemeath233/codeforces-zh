@@ -1,0 +1,3 @@
+# Codeforces AI Translation Mirror - Root Requirements Redirect
+# Run: pip install -r requirements.txt
+-r backend/requirements.txt

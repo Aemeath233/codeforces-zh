@@ -26,22 +26,24 @@ interface ProblemsetLibraryProps {
     timerCountdown: number;
   };
   onStartBatch: (selectedProblems: Problem[]) => Promise<void>;
+  acSyncTrigger?: number;
 }
 
 // Curated list of popular Codeforces tags for the selector
 const POPULAR_TAGS = [
-  "implementation", "math", "greedy", "dp", "data structures", 
-  "brute force", "constructive algorithms", "graphs", "sortings", 
-  "binary search", "dfs and similar", "trees", "strings", 
-  "number theory", "combinatorics", "two pointers", "geometry", 
+  "implementation", "math", "greedy", "dp", "data structures",
+  "brute force", "constructive algorithms", "graphs", "sortings",
+  "binary search", "dfs and similar", "trees", "strings",
+  "number theory", "combinatorics", "two pointers", "geometry",
   "bitmasks", "dsu", "shortest paths", "probabilities"
 ];
 
-export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({ 
-  onSelectProblem, 
+export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
+  onSelectProblem,
   onShowToast,
   batchQueue,
-  onStartBatch
+  onStartBatch,
+  acSyncTrigger
 }) => {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [total, setTotal] = useState(0);
@@ -54,23 +56,23 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
     return val ? parseInt(val, 10) : 50;
   });
   const [jumpPageInput, setJumpPageInput] = useState('');
-  
+
   // Search & Filter states
   const [searchQuery, setSearchQuery] = useState(() => localStorage.getItem('cf_lib_search_query') || '');
   const [selectedTag, setSelectedTag] = useState(() => localStorage.getItem('cf_lib_selected_tag') || '');
   const [minRating, setMinRating] = useState<string>(() => localStorage.getItem('cf_lib_min_rating') || '');
   const [maxRating, setMaxRating] = useState<string>(() => localStorage.getItem('cf_lib_max_rating') || '');
-  
+
   // Sorting states
   const [sortBy, setSortBy] = useState<'rating' | null>(() => localStorage.getItem('cf_lib_sort_by') as 'rating' | null || null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(() => localStorage.getItem('cf_lib_sort_order') as 'asc' | 'desc' || 'asc');
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Checkbox selection states
-  const [selectedProblemIds, setSelectedProblemIds] = useState<string[]>(() => {
-    const val = localStorage.getItem('cf_lib_selected_ids');
+  const [selectedProblems, setSelectedProblems] = useState<Problem[]>(() => {
+    const val = localStorage.getItem('cf_lib_selected_problems');
     try {
       return val ? JSON.parse(val) : [];
     } catch {
@@ -80,8 +82,8 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
 
   // Synchronize selection to localStorage
   useEffect(() => {
-    localStorage.setItem('cf_lib_selected_ids', JSON.stringify(selectedProblemIds));
-  }, [selectedProblemIds]);
+    localStorage.setItem('cf_lib_selected_problems', JSON.stringify(selectedProblems));
+  }, [selectedProblems]);
 
 
 
@@ -108,7 +110,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
         page: page.toString(),
         limit: limit.toString()
       });
-      
+
       if (searchQuery.trim()) queryParams.append('query', searchQuery.trim());
       if (selectedTag) queryParams.append('tag', selectedTag);
       if (minRating) queryParams.append('min_rating', minRating);
@@ -140,7 +142,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
       fetchProblems();
     }, 0);
     return () => clearTimeout(timer);
-  }, [fetchProblems]);
+  }, [fetchProblems, acSyncTrigger]);
 
   const handleLimitChange = (newLimit: number) => {
     setLimit(newLimit);
@@ -175,10 +177,10 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
 
   const handleSyncLibrary = async () => {
     if (!window.confirm('从 Codeforces 官方同步全部题库可能需要 10~20 秒，您确定要开始同步吗？')) return;
-    
+
     setIsSyncing(true);
     onShowToast('正在从 Codeforces 同步全量官方题库，请稍候...', 'success');
-    
+
     try {
       const response = await fetch(`${API_BASE}/api/problems/sync`);
       if (response.ok) {
@@ -261,7 +263,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            
+
             {/* Rating Boundaries */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexGrow: 1 }}>
               <input
@@ -333,11 +335,11 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
 
       {/* Grid Library List */}
       <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-premium)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        
+
 
 
         {/* Selected Control Bar */}
-        {selectedProblemIds.length > 0 && !batchQueue.isActive && (
+        {selectedProblems.length > 0 && !batchQueue.isActive && (
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
@@ -350,12 +352,12 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
             animation: 'fadeIn 0.2s ease'
           }}>
             <div style={{ fontSize: '13.5px', color: 'var(--text-secondary)' }}>
-              已选中 <strong style={{ color: 'var(--primary)' }}>{selectedProblemIds.length}</strong> 道题目
+              已选中 <strong style={{ color: 'var(--primary)' }}>{selectedProblems.length}</strong> 道题目
             </div>
-            
+
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
-                onClick={() => setSelectedProblemIds([])}
+                onClick={() => setSelectedProblems([])}
                 className="btn-secondary"
                 style={{ padding: '6px 12px', fontSize: '12.5px', fontWeight: 600 }}
               >
@@ -363,8 +365,8 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
               </button>
               <button
                 onClick={async () => {
-                  const selectedList = problems.filter(p => selectedProblemIds.includes(p.id));
-                  setSelectedProblemIds([]);
+                  const selectedList = [...selectedProblems];
+                  setSelectedProblems([]);
                   await onStartBatch(selectedList);
                 }}
                 className="search-button"
@@ -391,12 +393,19 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                 <th style={{ padding: '12px 16px', width: '40px' }}>
                   <input
                     type="checkbox"
-                    checked={problems.length > 0 && selectedProblemIds.length === problems.length}
+                    checked={problems.length > 0 && problems.every(p => selectedProblems.some(sp => sp.id === p.id))}
                     onChange={(e) => {
                       if (e.target.checked) {
-                        setSelectedProblemIds(problems.map(p => p.id));
+                        setSelectedProblems(prev => {
+                          const currentIds = new Set(problems.map(p => p.id));
+                          const filtered = prev.filter(sp => !currentIds.has(sp.id));
+                          return [...filtered, ...problems];
+                        });
                       } else {
-                        setSelectedProblemIds([]);
+                        setSelectedProblems(prev => {
+                          const currentIds = new Set(problems.map(p => p.id));
+                          return prev.filter(sp => !currentIds.has(sp.id));
+                        });
                       }
                     }}
                     disabled={batchQueue.isActive}
@@ -406,7 +415,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                 </th>
                 <th style={{ padding: '12px 16px', width: '150px' }}>代码 (Code)</th>
                 <th style={{ padding: '12px 16px', width: '35%' }}>题目名称 (Problem Title)</th>
-                <th 
+                <th
                   onClick={handleSortByRating}
                   style={{ padding: '12px 16px', width: '130px', cursor: 'pointer', userSelect: 'none' }}
                   className="hover-sortable"
@@ -442,7 +451,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
               ) : (
                 problems.map((p) => {
                   const ratingStyle = getRatingStyle(p.rating);
-                  const isSelected = selectedProblemIds.includes(p.id);
+                  const isSelected = selectedProblems.some(sp => sp.id === p.id);
                   return (
                     <tr
                       key={p.id}
@@ -462,16 +471,16 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                           checked={isSelected}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setSelectedProblemIds(prev => [...prev, p.id]);
+                              setSelectedProblems(prev => [...prev, p]);
                             } else {
-                              setSelectedProblemIds(prev => prev.filter(id => id !== p.id));
+                              setSelectedProblems(prev => prev.filter(sp => sp.id !== p.id));
                             }
                           }}
                           disabled={batchQueue.isActive}
                           style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
                         />
                       </td>
-                      
+
                       {/* Code badge */}
                       <td style={{ padding: '16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
@@ -510,14 +519,14 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                           )}
                         </div>
                       </td>
-                      
+
                       {/* Name */}
                       <td style={{ padding: '16px' }}>
                         <span style={{ fontWeight: 600, fontSize: '14.5px', color: 'var(--text-primary)' }}>
                           {p.name}
                         </span>
                       </td>
-                      
+
                       {/* Rating */}
                       <td style={{ padding: '16px' }}>
                         {p.rating !== null ? (
@@ -539,7 +548,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>-</span>
                         )}
                       </td>
-                      
+
                       {/* Solves */}
                       <td style={{ padding: '16px' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--text-secondary)', fontSize: '13px' }}>
@@ -595,7 +604,7 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
               <span style={{ fontSize: '13.5px', color: 'var(--text-secondary)' }}>
                 显示 <b>{(page - 1) * limit + 1} - {Math.min(page * limit, total)}</b> 条 ，共计 <b>{total.toLocaleString()}</b> 道题
               </span>
-              
+
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13.5px', color: 'var(--text-secondary)' }}>
                 <span>每页显示:</span>
                 <select
@@ -647,21 +656,21 @@ export const ProblemsetLibrary: React.FC<ProblemsetLibraryProps> = ({
                 {(() => {
                   const pages = [];
                   const range = 2; // how many pages around current page
-                  
+
                   pages.push(1);
-                  
+
                   if (page > range + 2) {
                     pages.push('...left-ell');
                   }
-                  
+
                   for (let i = Math.max(2, page - range); i <= Math.min(totalPages - 1, page + range); i++) {
                     pages.push(i);
                   }
-                  
+
                   if (page < totalPages - range - 1) {
                     pages.push('...right-ell');
                   }
-                  
+
                   if (totalPages > 1) {
                     pages.push(totalPages);
                   }

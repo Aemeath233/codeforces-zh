@@ -16,9 +16,10 @@ interface CachedProblem {
 interface CachedProblemsProps {
   onSelectProblem: (contestId: number, index: string) => void;
   onShowToast: (message: string, type: 'success' | 'error') => void;
+  acSyncTrigger?: number;
 }
 
-export const CachedProblems: React.FC<CachedProblemsProps> = ({ onSelectProblem, onShowToast }) => {
+export const CachedProblems: React.FC<CachedProblemsProps> = ({ onSelectProblem, onShowToast, acSyncTrigger }) => {
   const [problems, setProblems] = useState<CachedProblem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -41,7 +42,7 @@ export const CachedProblems: React.FC<CachedProblemsProps> = ({ onSelectProblem,
       }
     };
     fetchCachedProblems();
-  }, [onShowToast]);
+  }, [onShowToast, acSyncTrigger]);
 
   const handleDeleteCache = async (e: React.MouseEvent, contestId: number, index: string) => {
     e.stopPropagation(); // Prevent row click
@@ -209,7 +210,7 @@ export const CachedProblems: React.FC<CachedProblemsProps> = ({ onSelectProblem,
                         </span>
                       </div>
                     </td>
-  
+
                     {/* Problem Title */}
                     <td style={{ padding: '18px 24px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -221,7 +222,7 @@ export const CachedProblems: React.FC<CachedProblemsProps> = ({ onSelectProblem,
                         </span>
                       </div>
                     </td>
-  
+
                     {/* Rating / Difficulty */}
                     <td style={{ padding: '18px 24px' }}>
                       {p.rating !== undefined && p.rating !== null ? (
@@ -243,7 +244,7 @@ export const CachedProblems: React.FC<CachedProblemsProps> = ({ onSelectProblem,
                         <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>-</span>
                       )}
                     </td>
-  
+
                     {/* Cache Date */}
                     <td style={{ padding: '18px 24px', fontSize: '13px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

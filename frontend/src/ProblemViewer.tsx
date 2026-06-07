@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { RefreshCw, BookOpen, Layers, Languages, Copy, Check, Clock, Cpu, FileText, Send, AlertTriangle } from 'lucide-react';
+import { RefreshCw, BookOpen, Layers, Languages, Copy, Check, Clock, Cpu, FileText, Send } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { API_BASE } from './api';
 
 interface SampleLine {
@@ -121,7 +122,7 @@ const InteractiveSample: React.FC<InteractiveSampleProps> = ({
       lines: [lines[0].text],
       class: lines[0].class
     };
-    
+
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i];
       if (line.class === currentBlock.class && line.class !== 'none') {
@@ -188,7 +189,7 @@ const InteractiveSample: React.FC<InteractiveSampleProps> = ({
       if (remainingInputLines % t === 0 && outputLines.length % t === 0) {
         const kIn = remainingInputLines / t;
         const kOut = outputLines.length / t;
-        
+
         tLine = inputLines[0];
         inputBlocks = Array.from({ length: t }).map((_, tcIdx) => {
           const startLine = 1 + tcIdx * kIn;
@@ -243,7 +244,7 @@ const InteractiveSample: React.FC<InteractiveSampleProps> = ({
         {/* Render test cases */}
         {inputBlocks.map((block, tcIdx) => {
           const isHovered = hoveredIdx === tcIdx;
-          
+
           return (
             <div
               key={tcIdx}
@@ -272,7 +273,7 @@ const InteractiveSample: React.FC<InteractiveSampleProps> = ({
         {/* Render test cases */}
         {outputBlocks.map((block, tcIdx) => {
           const isHovered = hoveredIdx === tcIdx;
-          
+
           return (
             <div
               key={tcIdx}
@@ -343,7 +344,7 @@ const AICopyButton: React.FC<AICopyButtonProps> = ({ problemData, hasNote, lang,
       text = text.replace(/<code[^>]*>/gi, '`');
       text = text.replace(/<\/code>/gi, '`');
       text = text.replace(/<[^>]+>/g, '');
-      
+
       const entities: { [key: string]: string } = {
         '&quot;': '"',
         '&amp;': '&',
@@ -357,7 +358,7 @@ const AICopyButton: React.FC<AICopyButtonProps> = ({ problemData, hasNote, lang,
         '&hellip;': '…'
       };
       text = text.replace(/&[a-z0-9#]+;/gi, (match) => entities[match] || match);
-      
+
       return text.split('\n').map(line => line.trim()).filter((line, i, arr) => line !== '' || arr[i-1] !== '').join('\n');
     };
 
@@ -366,7 +367,7 @@ const AICopyButton: React.FC<AICopyButtonProps> = ({ problemData, hasNote, lang,
       let cleanDescHtml = problemData.translated.description_html || '';
       cleanDescHtml = cleanDescHtml.replace(/^<div style=['"]background:\s*#(eff6ff|fee2e2|fef08a)[^>]*>([\s\S]*?)<\/div>/i, '');
       cleanDescHtml = cleanDescHtml.replace(/^<div style=['"][^'"]*['"]>\s*.*?(?:智能加速翻译|系统提示|多API回退告警|智能翻译节点).*?<\/div>/i, '');
-      
+
       const desc = cleanHtmlToText(cleanDescHtml);
       const inputSpec = cleanHtmlToText(problemData.translated.input_spec_html);
       const outputSpec = cleanHtmlToText(problemData.translated.output_spec_html);
@@ -375,7 +376,7 @@ const AICopyButton: React.FC<AICopyButtonProps> = ({ problemData, hasNote, lang,
       let fullMarkdown = `# 题目: ${title}\n`;
       fullMarkdown += `**时间限制**: ${problemData.time_limit} | **内存限制**: ${problemData.memory_limit}\n\n`;
       fullMarkdown += `## 题目描述\n${desc}\n\n`;
-      
+
       if (inputSpec) {
         fullMarkdown += `## 输入格式说明\n${inputSpec}\n\n`;
       }
@@ -385,7 +386,7 @@ const AICopyButton: React.FC<AICopyButtonProps> = ({ problemData, hasNote, lang,
       if (note && hasNote) {
         fullMarkdown += `## 提示与说明\n${note}\n\n`;
       }
-      
+
       if (problemData.samples && problemData.samples.length > 0) {
         fullMarkdown += `## 评测样例数据 (Examples)\n`;
         problemData.samples.forEach((sample, idx) => {
@@ -408,7 +409,7 @@ const AICopyButton: React.FC<AICopyButtonProps> = ({ problemData, hasNote, lang,
       let fullMarkdown = `# Problem: ${title}\n`;
       fullMarkdown += `**Time Limit**: ${problemData.time_limit} | **Memory Limit**: ${problemData.memory_limit}\n\n`;
       fullMarkdown += `## Description\n${desc}\n\n`;
-      
+
       if (inputSpec) {
         fullMarkdown += `## Input\n${inputSpec}\n\n`;
       }
@@ -418,7 +419,7 @@ const AICopyButton: React.FC<AICopyButtonProps> = ({ problemData, hasNote, lang,
       if (note && hasNote) {
         fullMarkdown += `## Note\n${note}\n\n`;
       }
-      
+
       if (problemData.samples && problemData.samples.length > 0) {
         fullMarkdown += `## Examples\n`;
         problemData.samples.forEach((sample, idx) => {
@@ -432,7 +433,7 @@ const AICopyButton: React.FC<AICopyButtonProps> = ({ problemData, hasNote, lang,
       setCopied(true);
       onShowToast('Original English problem (formatted Markdown) copied!', 'success');
     }
-    
+
     setTimeout(() => {
       setCopied(false);
     }, 2000);
@@ -481,6 +482,10 @@ interface MathJaxWindow extends Window {
 
 const MathJaxHtml: React.FC<MathJaxHtmlProps> = React.memo(({ html, className }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const sanitizedHtml = React.useMemo(() => {
+    return DOMPurify.sanitize(html || '');
+  }, [html]);
 
   useEffect(() => {
     let isMounted = true;
@@ -533,9 +538,9 @@ const MathJaxHtml: React.FC<MathJaxHtmlProps> = React.memo(({ html, className })
         clearInterval(pollInterval);
       }
     };
-  }, [html]);
+  }, [sanitizedHtml]);
 
-  return <div ref={containerRef} className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div ref={containerRef} className={className} dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
 }, (prevProps, nextProps) => {
   return prevProps.html === nextProps.html;
 });
@@ -553,12 +558,12 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
     <div className="tex2jax_process" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* 2. Reader Body */}
       <div className={`problem-reader-split ${viewMode !== 'bilingual' ? 'single-column' : ''}`}>
-        
+
         {/* Chinese Content Column */}
         {(viewMode === 'bilingual' || viewMode === 'chinese') && (
           <div className="reader-column" style={{ position: 'relative' }}>
             {viewMode === 'bilingual' && <div className="column-header-tab">中文智能翻译</div>}
-            
+
             <AICopyButton
               problemData={problemData}
               hasNote={hasNote}
@@ -566,16 +571,16 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
               viewMode={viewMode}
               onShowToast={onShowToast}
             />
-            
+
             {/* Title */}
             <div className="problem-html">
               <h2 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '16px', color: 'var(--primary)' }}>
                 {problemData.translated.title}
               </h2>
-              
+
               {/* Description */}
               <MathJaxHtml html={problemData.translated.description_html} />
-              
+
               {/* Input format */}
               {problemData.translated.input_spec_html && (
                 <>
@@ -607,7 +612,7 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
         {(viewMode === 'bilingual' || viewMode === 'english') && (
           <div className="reader-column" style={{ position: 'relative' }}>
             {viewMode === 'bilingual' && <div className="column-header-tab en">Original English</div>}
-            
+
             <AICopyButton
               problemData={problemData}
               hasNote={hasNote}
@@ -615,14 +620,14 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
               viewMode={viewMode}
               onShowToast={onShowToast}
             />
-            
+
             <div className="problem-html">
               <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '16px', color: 'var(--text-primary)' }}>
                 {problemData.title}
               </h2>
-              
+
               <MathJaxHtml html={problemData.description_html} />
-              
+
               {problemData.input_spec_html && (
                 <>
                   <div className="section-subtitle" style={{ borderColor: 'var(--text-secondary)' }}>Input</div>
@@ -650,7 +655,7 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
 
       {/* 3. Sample Tests & Note (Always full width at bottom for comfortable reading) */}
       <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '32px', boxShadow: 'var(--shadow-premium)' }}>
-        
+
         {/* Samples */}
         {problemData.samples && problemData.samples.length > 0 && (
           <div>
@@ -663,7 +668,7 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
                   <div className="sample-header">
                     <span>样例 #{idx + 1}</span>
                   </div>
-                  
+
                   <InteractiveSample
                     input={sample.input}
                     output={sample.output}
@@ -703,14 +708,12 @@ const ProblemContent = React.memo(({ problemData, viewMode, hasNote, onShowToast
 }, (prevProps, nextProps) => {
   return prevProps.viewMode === nextProps.viewMode &&
          prevProps.hasNote === nextProps.hasNote &&
-         prevProps.problemData.problem_id === nextProps.problemData.problem_id &&
-         prevProps.problemData.translated?.description_html === nextProps.problemData.translated?.description_html &&
-         prevProps.problemData.description_html === nextProps.problemData.description_html;
+         prevProps.problemData === nextProps.problemData;
 });
 
 interface ProblemViewerProps {
   problemData: ProblemData;
-  onRefresh: () => void;
+  onRefresh: (newData?: ProblemData) => void;
   onShowToast: (message: string, type: 'success' | 'error') => void;
 }
 
@@ -718,8 +721,8 @@ export const ProblemViewer: React.FC<ProblemViewerProps> = ({ problemData, onRef
   const [viewMode, setViewMode] = useState<'bilingual' | 'chinese' | 'english'>('chinese');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Direct Submission States
-  const [cfUser, setCfUser] = useState<{ cf_handle: string; cf_cookies_configured: boolean } | null>(null);
+  // Submission / AC Sync States
+  const [cfUser, setCfUser] = useState<{ cf_handle: string; cf_cookies_configured: boolean; ac_sync_configured?: boolean } | null>(null);
   const [compilerId, setCompilerId] = useState(() => localStorage.getItem('cf_compiler_id') || '89'); // Default to C++20 or memorized choice
 
   const handleForceRefresh = async () => {
@@ -730,8 +733,9 @@ export const ProblemViewer: React.FC<ProblemViewerProps> = ({ problemData, onRef
         `${API_BASE}/api/problem/${problemData.contest_id}/${problemData.index}?force_refresh=true`
       );
       if (response.ok) {
+        const newData = await response.json();
         onShowToast('重新翻译成功！已更新题面。', 'success');
-        onRefresh(); // Trigger parent fetch to update state
+        onRefresh(newData); // Directly update parent state with new data
       } else {
         const err = await response.json();
         onShowToast(err.detail || '重构翻译失败，请检查配置或网络', 'error');
@@ -776,7 +780,7 @@ export const ProblemViewer: React.FC<ProblemViewerProps> = ({ problemData, onRef
               ({problemData.title})
             </span>
           </h1>
-          
+
           <div className="problem-meta-list">
             <div className="problem-meta-item">
               <Clock size={16} />
@@ -857,40 +861,37 @@ export const ProblemViewer: React.FC<ProblemViewerProps> = ({ problemData, onRef
         <h2 className="panel-title" style={{ fontSize: '18px', borderBottom: 'none', paddingBottom: 0, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           🚀 提交解答至官网 (Submit Solution to Codeforces)
         </h2>
-        
+
         {cfUser === null ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px', backgroundColor: 'var(--bg-hover)', borderRadius: '10px', fontSize: '14px', color: 'var(--text-secondary)' }}>
             <RefreshCw size={16} className="spinner" />
             <span>正在检测您的 Codeforces 会话状态...</span>
           </div>
-        ) : !cfUser.cf_cookies_configured ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px', backgroundColor: 'var(--warning-bg)', border: '1px solid HSL(38, 92%, 85%)', borderRadius: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--warning)', fontWeight: 600 }}>
-              <AlertTriangle size={20} />
-              <span>尚未配置 Codeforces 登录凭证</span>
-            </div>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              您尚未在镜像站录入您的 Codeforces Cookie 和 Handle，无法通过本镜像站直接向 Codeforces 官方评测机提交代码。
-            </p>
-            <div style={{ marginTop: '4px' }}>
-              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                请前往左侧边栏的 <strong>「管理后台 (设置)」</strong> 录入您的 Cookie，录入后即可在此页直接提交。
-              </span>
-            </div>
-          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {/* Account Bind Meta */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: 'var(--primary-light)', borderRadius: '10px', border: '1px solid HSL(221, 83%, 92%)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
-                <span style={{ color: 'var(--primary)', fontWeight: 700 }}>●</span>
-                <span style={{ color: 'var(--text-secondary)' }}>Codeforces 账号已授权连接:</span>
-                <strong style={{ color: 'var(--primary)', fontFamily: 'var(--font-sans)', fontWeight: 700 }}>{cfUser.cf_handle}</strong>
+            {cfUser.cf_handle ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: 'var(--primary-light)', borderRadius: '10px', border: '1px solid HSL(221, 83%, 92%)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+                  <span style={{ color: 'var(--primary)', fontWeight: 700 }}>●</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>Codeforces 账号已连接:</span>
+                  <strong style={{ color: 'var(--primary)', fontFamily: 'var(--font-sans)', fontWeight: 700 }}>{cfUser.cf_handle}</strong>
+                </div>
+                <span style={{ fontSize: '11px', color: 'var(--primary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  已激活做题/AC状态同步
+                </span>
               </div>
-              <span style={{ fontSize: '11px', color: 'var(--primary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                官网同步就绪
-              </span>
-            </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px 16px', backgroundColor: 'var(--bg-hover)', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px', color: 'var(--text-secondary)' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>○</span>
+                  <span>当前未配置 Codeforces 账号 (无法自动同步已 AC 状态)。</span>
+                </div>
+                <span style={{ fontSize: '12.5px', color: 'var(--text-muted)' }}>
+                  您仍可正常使用下方按钮前往官网提交。如需在列表中同步您的做题记录与 AC 标记，请前往左侧边栏的 <strong>「管理后台 (设置)」</strong> 录入您的 Codeforces Handle。
+                </span>
+              </div>
+            )}
 
             {/* Form control: Compiler select */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

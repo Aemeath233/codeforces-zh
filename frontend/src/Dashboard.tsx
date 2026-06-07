@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Award, X, RefreshCw } from 'lucide-react';
 import { API_BASE } from './api';
 
@@ -24,9 +24,10 @@ interface ContestProblem {
 interface DashboardProps {
   onSearchProblem: (contestId: number, index: string) => void;
   onShowToast: (message: string, type: 'success' | 'error') => void;
+  acSyncTrigger?: number;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onSearchProblem, onShowToast }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onSearchProblem, onShowToast, acSyncTrigger }) => {
   const [contests, setContests] = useState<Contest[]>([]);
   const [isLoadingContests, setIsLoadingContests] = useState(false);
 
@@ -64,8 +65,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSearchProblem, onShowToa
     fetchContests();
   }, [onShowToast]);
 
-
-  const fetchContestProblems = async (contestId: number) => {
+  const fetchContestProblems = useCallback(async (contestId: number) => {
     setIsLoadingProblems(true);
     setContestProblems([]);
     try {
@@ -84,7 +84,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSearchProblem, onShowToa
     } finally {
       setIsLoadingProblems(false);
     }
-  };
+  }, [onShowToast]);
+
+  useEffect(() => {
+    if (selectedContest) {
+      let active = true;
+      const load = async () => {
+        await Promise.resolve();
+        if (active) {
+          fetchContestProblems(selectedContest.id);
+        }
+      };
+      load();
+      return () => {
+        active = false;
+      };
+    }
+  }, [acSyncTrigger, selectedContest, fetchContestProblems]);
 
   const handleContestClick = (contest: Contest) => {
     if (contest.phase === 'BEFORE') {
@@ -92,7 +108,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSearchProblem, onShowToa
       return;
     }
     setSelectedContest(contest);
-    fetchContestProblems(contest.id);
   };
 
   const formatTime = (timestamp?: number) => {
@@ -217,7 +232,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSearchProblem, onShowToa
             })}
           </div>
         </div>
-        
+
         <div className="contest-list" style={{ maxHeight: '600px', overflowY: 'auto' }}>
           {isLoadingContests ? (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
@@ -239,7 +254,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSearchProblem, onShowToa
                 statusText = '即将开始';
                 statusClass = 'status-before';
               }
-              
+
               return (
                 <div key={c.id} className="contest-card" onClick={() => handleContestClick(c)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="contest-info">
@@ -296,22 +311,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSearchProblem, onShowToa
             {(() => {
               const pages = [];
               const range = 2; // how many pages to show around current page
-              
+
               // Always show first page
               pages.push(1);
-              
+
               if (currentPage > range + 2) {
                 pages.push('...1');
               }
-              
+
               for (let i = Math.max(2, currentPage - range); i <= Math.min(totalPages - 1, currentPage + range); i++) {
                 pages.push(i);
               }
-              
+
               if (currentPage < totalPages - range - 1) {
                 pages.push('...2');
               }
-              
+
               // Always show last page (if totalPages > 1)
               if (totalPages > 1) {
                 pages.push(totalPages);
@@ -385,7 +400,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSearchProblem, onShowToa
                 <X size={18} />
               </button>
             </div>
-            
+
             <div className="modal-body">
               {isLoadingProblems ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: '16px' }}>
@@ -405,7 +420,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSearchProblem, onShowToa
                       else if (p.rating < 1900) ratingClass = 'rating-medium';
                       else ratingClass = 'rating-hard';
                     }
-                    
+
                     return (
                       <div
                         key={p.index}
