@@ -86,22 +86,7 @@
     <!-- Grid Library List -->
     <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; boxShadow: var(--shadow-premium); display: flex; flex-direction: column; gap: 20px;">
 
-        <!-- Selected Control Bar -->
-        <div id="batch-control-bar" style="display: none; justify-content: space-between; align-items: center; padding: 12px 20px; background-color: var(--bg-hover); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 4px;">
-            <div style="font-size: 13.5px; color: var(--text-secondary);">
-                已选中 <strong style="color: var(--primary);" id="selected-count">0</strong> 道题目
-            </div>
 
-            <div style="display: flex; gap: 12px;">
-                <button onclick="clearSelection()" class="btn-secondary" style="padding: 6px 12px; font-size: 12.5px; font-weight: 600;">
-                    取消选择
-                </button>
-                <button onclick="startBatchTranslation()" class="search-button" style="padding: 6px 16px; font-size: 12.5px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
-                    <i data-lucide="zap" style="width: 14px; height: 14px;"></i>
-                    <span>批量翻译预热 (每题冷却 60s)</span>
-                </button>
-            </div>
-        </div>
 
         <!-- Table representation -->
         <div style="overflow-x: auto;">
@@ -183,12 +168,58 @@
         </div>
     </div>
 </div>
+
+<!-- Floating Batch Control Bar -->
+<div id="batch-control-bar">
+    <div style="font-size: 14px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+        <i data-lucide="info" style="width: 16px; height: 16px; color: var(--primary);"></i>
+        <span>已选中 <strong style="color: var(--primary);" id="selected-count">0</strong> 道题目</span>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center;">
+        <button onclick="clearSelection()" class="btn-secondary" style="padding: 8px 16px; font-size: 13px; font-weight: 600;">
+            取消选择
+        </button>
+        <button onclick="startBatchTranslation()" class="search-button" style="padding: 8px 20px; font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 8px;">
+            <i data-lucide="zap" style="width: 14px; height: 14px;"></i>
+            <span>批量翻译预热</span>
+        </button>
+    </div>
+</div>
 {% endblock %}
 
 {% block head %}
 <style>
     .contest-card-row:hover {
         background-color: var(--primary-light) !important;
+    }
+    
+    /* Elegant Floating Glassmorphic Batch Control Bar */
+    #batch-control-bar {
+        position: fixed;
+        bottom: 32px;
+        left: 50%;
+        transform: translate(-50%, 120%);
+        z-index: 999;
+        width: 90%;
+        max-width: 550px;
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.2), var(--shadow-premium);
+        border-radius: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 24px;
+        transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+        opacity: 0;
+        pointer-events: none;
+        backdrop-filter: blur(8px);
+    }
+    
+    #batch-control-bar.show {
+        transform: translate(-50%, 0);
+        opacity: 1;
+        pointer-events: auto;
     }
 </style>
 {% endblock %}
@@ -658,10 +689,10 @@
         const bar = document.getElementById('batch-control-bar');
         const count = document.getElementById('selected-count');
         if (selectedProblems.length > 0) {
-            bar.style.display = 'flex';
+            bar.classList.add('show');
             count.innerText = selectedProblems.length;
         } else {
-            bar.style.display = 'none';
+            bar.classList.remove('show');
         }
     }
 
