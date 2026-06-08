@@ -1,0 +1,690 @@
+{% extends 'base.html' %}
+
+{% block title %}官方算法题库列表 - CF 中文镜像站{% endblock %}
+
+{% block content %}
+<div>
+    <!-- Page Header -->
+    <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+            <h1 class="page-title">官方算法题库列表</h1>
+            <p class="page-subtitle">浏览全网 8000+ 道 Codeforces 经典题目，按算法、难度精准筛选，一键中文翻译做题。</p>
+        </div>
+        <button
+            class="btn-secondary"
+            id="sync-lib-btn"
+            onclick="syncLibrary()"
+            style="display: flex; align-items: center; gap: 8px; padding: 10px 16px;"
+        >
+            <i data-lucide="refresh-cw" id="sync-icon" style="width: 16px; height: 16px;"></i>
+            <span id="sync-btn-text">同步官方题库</span>
+        </button>
+    </div>
+
+    <!-- Modern Filter Dashboard Panel -->
+    <div class="search-container">
+        <form id="filter-form" onsubmit="handleSearchSubmit(event)" style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="search-row">
+                <!-- Keyword search -->
+                <div class="search-input-wrapper" style="flex-grow: 3;">
+                    <i data-lucide="search" class="search-icon" style="width: 20px; height: 20px;"></i>
+                    <input
+                        type="text"
+                        id="searchQuery"
+                        class="search-input"
+                        placeholder="搜索题目名称、比赛ID (例如 '1800' 或 'soft drinking')"
+                    />
+                </div>
+
+                <!-- Rating Boundaries -->
+                <div style="display: flex; align-items: center; gap: 6px; flex-grow: 1;">
+                    <input
+                        type="number"
+                        id="minRating"
+                        class="form-input"
+                        style="padding: 12.5px 12px; min-width: 80px;"
+                        placeholder="Min Rating (如 800)"
+                    />
+                    <span style="color: var(--text-secondary);">-</span>
+                    <input
+                        type="number"
+                        id="maxRating"
+                        class="form-input"
+                        style="padding: 12.5px 12px; min-width: 80px;"
+                        placeholder="Max Rating (如 2000)"
+                    />
+                </div>
+
+                <button type="submit" class="search-button">
+                    筛选检索
+                </button>
+            </div>
+
+            <!-- Tags list filters -->
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <span style="font-size: 13px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                    <i data-lucide="hash" style="width: 14px; height: 14px;"></i> 算法标签筛选 (Tags)
+                </span>
+                <div id="tags-container" style="display: flex; gap: 8px; flex-wrap: wrap; max-height: 72px; overflow-y: auto; padding-right: 4px;">
+                    <!-- Tags populated dynamically via JS -->
+                </div>
+            </div>
+
+            <!-- Clear button -->
+            <button
+                type="button"
+                id="clear-filters-btn"
+                class="btn-secondary"
+                onclick="handleClearFilters()"
+                style="display: none; width: fit-content; padding: 6px 12px; font-size: 12px; align-self: flex-end;"
+            >
+                清空筛选条件
+            </button>
+        </form>
+    </div>
+
+    <!-- Grid Library List -->
+    <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; boxShadow: var(--shadow-premium); display: flex; flex-direction: column; gap: 20px;">
+
+        <!-- Selected Control Bar -->
+        <div id="batch-control-bar" style="display: none; justify-content: space-between; align-items: center; padding: 12px 20px; background-color: var(--bg-hover); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 4px;">
+            <div style="font-size: 13.5px; color: var(--text-secondary);">
+                已选中 <strong style="color: var(--primary);" id="selected-count">0</strong> 道题目
+            </div>
+
+            <div style="display: flex; gap: 12px;">
+                <button onclick="clearSelection()" class="btn-secondary" style="padding: 6px 12px; font-size: 12.5px; font-weight: 600;">
+                    取消选择
+                </button>
+                <button onclick="startBatchTranslation()" class="search-button" style="padding: 6px 16px; font-size: 12.5px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
+                    <span>🚀 批量翻译预热 (每题冷却 60s)</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Table representation -->
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; min-width: 700px;">
+                <thead>
+                    <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-size: 13px; font-weight: 600;">
+                        <th style="padding: 12px 16px; width: 40px;">
+                            <input
+                                type="checkbox"
+                                id="select-all-checkbox"
+                                onclick="toggleSelectAll(this)"
+                                style="cursor: pointer; transform: scale(1.15);"
+                                title="选择本页所有题目"
+                            />
+                        </th>
+                        <th style="padding: 12px 16px; width: 150px;">代码 (Code)</th>
+                        <th style="padding: 12px 16px; width: 35%;">题目名称 (Problem Title)</th>
+                        <th onclick="handleSortByRating()" style="padding: 12px 16px; width: 130px; cursor: pointer; user-select: none;" class="hover-sortable" title="点击按难度评分排序">
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <span>难度评分 (Rating)</span>
+                                <span id="sort-indicator" style="opacity: 0.3;">⇅</span>
+                            </div>
+                        </th>
+                        <th style="padding: 12px 16px; width: 130px;">解出人数 (Solves)</th>
+                        <th style="padding: 12px 16px;">标签 (Tags)</th>
+                    </tr>
+                </thead>
+                <tbody id="problems-table-body">
+                    <!-- Loaded via JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Elegant Pagination Controls -->
+        <div id="library-pagination" style="display: none; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px;">
+            <!-- Left side: statistics and limit select -->
+            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                <span style="font-size: 13.5px; color: var(--text-secondary);" id="pagination-stats">
+                    显示 <b>0 - 0</b> 条 ，共计 <b>0</b> 道题
+                </span>
+
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--text-secondary);">
+                    <span>每页显示:</span>
+                    <select
+                        id="limit-select"
+                        onchange="handleLimitChange(this.value)"
+                        style="padding: 4px 8px; font-size: 13.5px; font-weight: 600; border: 1px solid var(--border-color); border-radius: var(--radius-sm); backgroundColor: var(--bg-sidebar); color: var(--text-primary); outline: none; cursor: pointer;"
+                    >
+                        <option value="10">10 条</option>
+                        <option value="20">20 条</option>
+                        <option value="50">50 条</option>
+                        <option value="100">100 条</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Right side: smart buttons and page jump input -->
+            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 6px;" id="pages-buttons-container">
+                    <!-- Page numbers populated via JS -->
+                </div>
+
+                <!-- Page Jump Form -->
+                <form onsubmit="handleJumpPage(event)" style="display: flex; align-items: center; gap: 6px;">
+                    <input
+                        type="number"
+                        id="jump-page-input"
+                        placeholder="页码..."
+                        style="width: 64px; padding: 6px 8px; font-size: 13px; text-align: center; border: 1px solid var(--border-color); border-radius: var(--radius-sm); backgroundColor: var(--bg-sidebar); color: var(--text-primary); outline: none;"
+                    />
+                    <button
+                        type="submit"
+                        style="padding: 6px 12px; font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background-color: var(--bg-main); color: var(--text-secondary); cursor: pointer; transition: all var(--transition-fast);"
+                    >
+                        跳转
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+    .contest-card-row:hover {
+        background-color: var(--primary-light) !important;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const POPULAR_TAGS = [
+        "implementation", "math", "greedy", "dp", "data structures",
+        "brute force", "constructive algorithms", "graphs", "sortings",
+        "binary search", "dfs and similar", "trees", "strings",
+        "number theory", "combinatorics", "two pointers", "geometry",
+        "bitmasks", "dsu", "shortest paths", "probabilities"
+    ];
+
+    let problems = [];
+    let total = 0;
+    let page = parseInt(localStorage.getItem('cf_lib_page') || '1', 10);
+    let limit = parseInt(localStorage.getItem('cf_lib_limit') || '50', 10);
+    let searchQuery = localStorage.getItem('cf_lib_search_query') || '';
+    let selectedTag = localStorage.getItem('cf_lib_selected_tag') || '';
+    let minRating = localStorage.getItem('cf_lib_min_rating') || '';
+    let maxRating = localStorage.getItem('cf_lib_max_rating') || '';
+    let sortBy = localStorage.getItem('cf_lib_sort_by') || null; // 'rating' or null
+    let sortOrder = localStorage.getItem('cf_lib_sort_order') || 'asc'; // 'asc' or 'desc'
+
+    // Selected problems list for batch processing
+    let selectedProblems = [];
+    try {
+        selectedProblems = JSON.parse(localStorage.getItem('cf_lib_selected_problems') || '[]');
+    } catch(e) {
+        selectedProblems = [];
+    }
+
+    // Sync library state
+    let isSyncing = false;
+
+    // Load initial values into inputs
+    document.getElementById('searchQuery').value = searchQuery;
+    document.getElementById('minRating').value = minRating;
+    document.getElementById('maxRating').value = maxRating;
+    document.getElementById('limit-select').value = limit.toString();
+
+    // Render filter tag buttons
+    function renderTagFilters() {
+        const container = document.getElementById('tags-container');
+        let html = '';
+        POPULAR_TAGS.forEach(tag => {
+            const isActive = tag === selectedTag;
+            html += `
+                <button
+                    type="button"
+                    onclick="handleTagClick('${tag}')"
+                    style="padding: 4px 10px; border-radius: 20px; font-size: 12px; border: 1px solid ${isActive ? 'var(--primary)' : 'var(--border-color)'}; background-color: ${isActive ? 'var(--primary-light)' : 'var(--bg-card)'}; color: ${isActive ? 'var(--primary)' : 'var(--text-secondary)'}; cursor: pointer; font-weight: ${isActive ? 600 : 500}; transition: all var(--transition-fast);"
+                >
+                    ${tag}
+                </button>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+    function handleTagClick(tag) {
+        selectedTag = selectedTag === tag ? '' : tag;
+        page = 1;
+        saveState();
+        renderTagFilters();
+        loadProblems();
+    }
+
+    // Save states to localStorage
+    function saveState() {
+        localStorage.setItem('cf_lib_page', page.toString());
+        localStorage.setItem('cf_lib_limit', limit.toString());
+        localStorage.setItem('cf_lib_search_query', searchQuery);
+        localStorage.setItem('cf_lib_selected_tag', selectedTag);
+        localStorage.setItem('cf_lib_min_rating', minRating);
+        localStorage.setItem('cf_lib_max_rating', maxRating);
+        if (sortBy) {
+            localStorage.setItem('cf_lib_sort_by', sortBy);
+        } else {
+            localStorage.removeItem('cf_lib_sort_by');
+        }
+        localStorage.setItem('cf_lib_sort_order', sortOrder);
+        localStorage.setItem('cf_lib_selected_problems', JSON.stringify(selectedProblems));
+    }
+
+    // Sync official library
+    async function syncLibrary() {
+        if (!confirm('从 Codeforces 官方同步全部题库可能需要 10~20 秒，您确定要开始同步吗？')) return;
+
+        isSyncing = true;
+        const btn = document.getElementById('sync-lib-btn');
+        const icon = document.getElementById('sync-icon');
+        const text = document.getElementById('sync-btn-text');
+
+        btn.disabled = true;
+        icon.classList.add('spinner');
+        text.innerText = '正在同步...';
+        showToast('正在从 Codeforces 同步全量官方题库，请稍候...', 'success');
+
+        try {
+            const response = await fetch('/api/problems/sync');
+            if (response.ok) {
+                const data = await response.json();
+                showToast(`题库同步成功！共更新了 ${data.count} 道题目。`, 'success');
+                page = 1;
+                saveState();
+                loadProblems();
+            } else {
+                showToast('同步官方题库失败，请检查网络或稍后重试', 'error');
+            }
+        } catch (e) {
+            console.error(e);
+            showToast('同步错误，请确认本地后端服务开启', 'error');
+        } finally {
+            isSyncing = false;
+            btn.disabled = false;
+            icon.classList.remove('spinner');
+            text.innerText = '同步官方题库';
+        }
+    }
+
+    // Load list
+    async function loadProblems() {
+        const tbody = document.getElementById('problems-table-body');
+        tbody.innerHTML = `
+            <tr>
+                <td colSpan="6" style="padding: 60px 0; text-align: center;">
+                    <div class="spinner" style="margin: 0 auto 16px auto; width: 36px; height: 36px;"></div>
+                    <div style="color: var(--text-secondary); font-size: 14px;">正在为您检索本地算法题库...</div>
+                </td>
+            </tr>
+        `;
+
+        // Update clear button visibility
+        const clearBtn = document.getElementById('clear-filters-btn');
+        if (searchQuery || selectedTag || minRating || maxRating) {
+            clearBtn.style.display = 'inline-block';
+        } else {
+            clearBtn.style.display = 'none';
+        }
+
+        try {
+            const queryParams = new URLSearchParams({
+                page: page.toString(),
+                limit: limit.toString()
+            });
+
+            if (searchQuery.trim()) queryParams.append('query', searchQuery.trim());
+            if (selectedTag) queryParams.append('tag', selectedTag);
+            if (minRating) queryParams.append('min_rating', minRating);
+            if (maxRating) queryParams.append('max_rating', maxRating);
+            if (sortBy) {
+                queryParams.append('sort_by', sortBy);
+                queryParams.append('sort_order', sortOrder);
+            }
+
+            const response = await fetch(`/api/problems?${queryParams.toString()}`);
+            if (response.ok) {
+                const data = await response.json();
+                problems = data.problems || [];
+                total = data.total || 0;
+                renderTable();
+            } else {
+                showToast('获取题库列表失败', 'error');
+            }
+        } catch (e) {
+            console.error(e);
+            showToast('网络错误，无法连接服务器', 'error');
+        }
+    }
+
+    function getRatingStyle(rating) {
+        if (rating === null || rating === undefined) return { bg: 'HSL(0, 0%, 94%)', text: 'HSL(0, 0%, 40%)', name: 'Unrated' };
+        if (rating < 1200) return { bg: 'HSL(142, 70%, 94%)', text: 'HSL(142, 72%, 29%)', name: 'Novice' }; // Easy Green
+        if (rating < 1600) return { bg: 'HSL(187, 75%, 94%)', text: 'HSL(187, 85%, 28%)', name: 'Medium' }; // Cyan
+        if (rating < 1900) return { bg: 'HSL(221, 80%, 94%)', text: 'HSL(221, 83%, 45%)', name: 'Expert' }; // Blue
+        if (rating < 2100) return { bg: 'HSL(280, 70%, 94%)', text: 'HSL(280, 80%, 40%)', name: 'Candidate Master' }; // Purple
+        if (rating < 2400) return { bg: 'HSL(38, 92%, 94%)', text: 'HSL(38, 92%, 40%)', name: 'Master' }; // Orange
+        return { bg: 'HSL(350, 80%, 94%)', text: 'HSL(350, 89%, 45%)', name: 'Grandmaster' }; // Red
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('problems-table-body');
+        
+        if (problems.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colSpan="6" style="padding: 60px 0; text-align: center; color: var(--text-muted);">
+                        没有找到符合筛选条件的题目。请尝试清空筛选条件或重新同步官方题库。
+                    </td>
+                </tr>
+            `;
+            document.getElementById('library-pagination').style.display = 'none';
+            return;
+        }
+
+        let html = '';
+        problems.forEach(p => {
+            const isSelected = selectedProblems.some(sp => sp.id === p.id);
+            const ratingStyle = getRatingStyle(p.rating);
+
+            let solvedBadge = '';
+            if (p.solved_status === 'OK') {
+                solvedBadge = '<span title="已通过 (Accepted)" style="display: inline-flex; font-size: 14px; cursor: default; flex-shrink: 0;">✅</span>';
+            } else if (p.solved_status === 'FAILED') {
+                solvedBadge = '<span title="尝试过未通过 (Attempted)" style="display: inline-flex; font-size: 14px; cursor: default; flex-shrink: 0;">❌</span>';
+            }
+
+            const cacheBadge = p.is_cached
+                ? `<span style="display: inline-flex; align-items: center; gap: 4px; background-color: rgba(16, 185, 129, 0.1); color: #10b981; padding: 2px 6px; border-radius: 4px; font-size: 11.5px; font-weight: 600; margin-left: 4px; cursor: default; white-space: nowrap; flex-shrink: 0;" title="已离线缓存，可秒开阅读">
+                     <span style="width: 5px; height: 5px; border-radius: 50%; backgroundColor: #10b981; display: inline-block; flex-shrink: 0;"></span>已译
+                   </span>`
+                : '';
+
+            const ratingHtml = p.rating !== null
+                ? `<div style="display: inline-flex; align-items: center; gap: 5px; background-color: ${ratingStyle.bg}; color: ${ratingStyle.text}; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700;">
+                     <i data-lucide="star" style="width: 12px; height: 12px; fill: ${ratingStyle.text}; color: ${ratingStyle.text};"></i>
+                     <span>${p.rating}</span>
+                   </div>`
+                : `<span style="font-size: 12px; color: var(--text-muted);">-</span>`;
+
+            let tagsHtml = '';
+            if (p.tags) {
+                p.tags.slice(0, 3).forEach(t => {
+                    tagsHtml += `<span style="font-size: 11px; background-color: var(--bg-main); color: var(--text-secondary); padding: 2px 8px; border-radius: 4px; white-space: nowrap;">${escapeHtml(t)}</span>`;
+                });
+                if (p.tags.length > 3) {
+                    tagsHtml += `<span style="font-size: 10px; color: var(--text-muted); align-self: center;">+${p.tags.length - 3}</span>`;
+                }
+            }
+
+            html += `
+                <tr onclick="window.location.href='/problem/${p.contest_id}/${p.index}'"
+                    style="border-bottom: 1px solid var(--border-color); cursor: pointer; transition: background-color var(--transition-fast); background-color: ${isSelected ? 'var(--primary-light)' : 'transparent'};"
+                    class="contest-card-row">
+                    <td style="padding: 16px; width: 40px;" onclick="event.stopPropagation()">
+                        <input
+                            type="checkbox"
+                            class="row-checkbox"
+                            data-id="${p.id}"
+                            ${isSelected ? 'checked' : ''}
+                            onclick="handleRowCheckbox(this, '${p.id}')"
+                            style="cursor: pointer; transform: scale(1.15);"
+                        />
+                    </td>
+                    <td style="padding: 16px;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;">
+                            ${solvedBadge}
+                            <span style="font-family: var(--font-mono); fontWeight: 700; fontSize: 13.5px; color: var(--primary); flex-shrink: 0; white-space: nowrap;">
+                                ${p.contest_id}${p.index}
+                            </span>
+                            ${cacheBadge}
+                        </div>
+                    </td>
+                    <td style="padding: 16px;">
+                        <span style="font-weight: 600; font-size: 14.5px; color: var(--text-primary);">
+                            ${escapeHtml(p.name)}
+                        </span>
+                    </td>
+                    <td style="padding: 16px;">
+                        ${ratingHtml}
+                    </td>
+                    <td style="padding: 16px;">
+                        <div style="display: inline-flex; align-items: center; gap: 4px; color: var(--text-secondary); font-size: 13px;">
+                            <i data-lucide="check-square" style="width:13px; height: 13px; color: var(--success);"></i>
+                            <span>${p.solved_count.toLocaleString()} solves</span>
+                        </div>
+                    </td>
+                    <td style="padding: 16px;">
+                        <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                            ${tagsHtml}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+        lucide.createIcons();
+
+        // Update select-all checkbox
+        const allChecked = problems.length > 0 && problems.every(p => selectedProblems.some(sp => sp.id === p.id));
+        document.getElementById('select-all-checkbox').checked = allChecked;
+
+        // Render Pagination
+        renderPaginationStats();
+        renderPaginationButtons();
+        updateBatchControlBar();
+    }
+
+    function renderPaginationStats() {
+        const totalPages = Math.ceil(total / limit) || 1;
+        const start = (page - 1) * limit + 1;
+        const end = Math.min(page * limit, total);
+        document.getElementById('pagination-stats').innerHTML = `
+            显示 <b>${start} - ${end}</b> 条 ，共计 <b>${total.toLocaleString()}</b> 道题
+        `;
+    }
+
+    function renderPaginationButtons() {
+        const totalPages = Math.ceil(total / limit) || 1;
+        const container = document.getElementById('pages-buttons-container');
+        document.getElementById('library-pagination').style.display = 'flex';
+
+        let html = `
+            <button class="btn-secondary" ${page <= 1 ? 'disabled' : ''} onclick="changePage(${page - 1})" style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm);">
+                <i data-lucide="chevron-left" style="width: 16px; height: 16px;"></i>
+            </button>
+        `;
+
+        const pages = [1];
+        const range = 2;
+        if (page > range + 2) {
+            pages.push('...');
+        }
+        for (let i = Math.max(2, page - range); i <= Math.min(totalPages - 1, page + range); i++) {
+            pages.push(i);
+        }
+        if (page < totalPages - range - 1) {
+            pages.push('...');
+        }
+        if (totalPages > 1) {
+            pages.push(totalPages);
+        }
+
+        pages.forEach(p => {
+            if (p === '...') {
+                html += `<span style="color: var(--text-muted); padding: 0 2px;">...</span>`;
+            } else {
+                const isSelected = page === p;
+                html += `
+                    <button onclick="changePage(${p})" style="width: 32px; height: 32px; font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); border: 1px solid; border-color: ${isSelected ? 'var(--primary)' : 'var(--border-color)'}; background-color: ${isSelected ? 'var(--primary)' : 'var(--bg-sidebar)'}; color: ${isSelected ? 'white' : 'var(--text-secondary)'}; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--transition-fast);">
+                        ${p}
+                    </button>
+                `;
+            }
+        });
+
+        html += `
+            <button class="btn-secondary" ${page >= totalPages ? 'disabled' : ''} onclick="changePage(${page + 1})" style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm);">
+                <i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i>
+            </button>
+        `;
+
+        container.innerHTML = html;
+        lucide.createIcons();
+    }
+
+    function changePage(p) {
+        page = p;
+        saveState();
+        loadProblems();
+    }
+
+    function handleLimitChange(val) {
+        limit = parseInt(val, 10);
+        page = 1;
+        saveState();
+        loadProblems();
+    }
+
+    function handleJumpPage(e) {
+        e.preventDefault();
+        const totalPages = Math.ceil(total / limit) || 1;
+        const jumpVal = parseInt(document.getElementById('jump-page-input').value, 10);
+        if (jumpVal && jumpVal >= 1 && jumpVal <= totalPages) {
+            page = jumpVal;
+            document.getElementById('jump-page-input').value = '';
+            saveState();
+            loadProblems();
+        } else {
+            showToast(`请输入 1 到 ${totalPages} 之间的有效页码！`, 'error');
+        }
+    }
+
+    function handleSearchSubmit(e) {
+        e.preventDefault();
+        searchQuery = document.getElementById('searchQuery').value;
+        minRating = document.getElementById('minRating').value;
+        maxRating = document.getElementById('maxRating').value;
+        page = 1;
+        saveState();
+        loadProblems();
+    }
+
+    function handleClearFilters() {
+        document.getElementById('searchQuery').value = '';
+        document.getElementById('minRating').value = '';
+        document.getElementById('maxRating').value = '';
+        searchQuery = '';
+        minRating = '';
+        maxRating = '';
+        selectedTag = '';
+        sortBy = null;
+        page = 1;
+        saveState();
+        renderTagFilters();
+        loadProblems();
+    }
+
+    function handleSortByRating() {
+        if (sortBy !== 'rating') {
+            sortBy = 'rating';
+            sortOrder = 'asc';
+        } else if (sortOrder === 'asc') {
+            sortOrder = 'desc';
+        } else {
+            sortBy = null;
+        }
+        page = 1;
+        saveState();
+        
+        // Update sorting indicators
+        const indicator = document.getElementById('sort-indicator');
+        if (sortBy === 'rating') {
+            indicator.innerText = sortOrder === 'asc' ? '🔼' : '🔽';
+            indicator.style.opacity = '1';
+        } else {
+            indicator.innerText = '⇅';
+            indicator.style.opacity = '0.3';
+        }
+
+        loadProblems();
+    }
+
+    // Row selection checkboxes logic
+    function handleRowCheckbox(checkbox, pId) {
+        const problem = problems.find(p => p.id === pId);
+        if (!problem) return;
+
+        if (checkbox.checked) {
+            if (!selectedProblems.some(sp => sp.id === pId)) {
+                selectedProblems.push(problem);
+            }
+        } else {
+            selectedProblems = selectedProblems.filter(sp => sp.id !== pId);
+        }
+        saveState();
+        
+        // Toggle row highlight
+        checkbox.closest('tr').style.backgroundColor = checkbox.checked ? 'var(--primary-light)' : 'transparent';
+        updateBatchControlBar();
+    }
+
+    function toggleSelectAll(checkbox) {
+        problems.forEach(p => {
+            const isSelected = selectedProblems.some(sp => sp.id === p.id);
+            if (checkbox.checked) {
+                if (!isSelected) {
+                    selectedProblems.push(p);
+                }
+            } else {
+                selectedProblems = selectedProblems.filter(sp => sp.id !== p.id);
+            }
+        });
+        saveState();
+        loadProblems(); // Rerender to refresh all checkboxes
+    }
+
+    function clearSelection() {
+        selectedProblems = [];
+        saveState();
+        loadProblems();
+    }
+
+    function updateBatchControlBar() {
+        const bar = document.getElementById('batch-control-bar');
+        const count = document.getElementById('selected-count');
+        if (selectedProblems.length > 0) {
+            bar.style.display = 'flex';
+            count.innerText = selectedProblems.length;
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+
+    // Trigger batch translation queue (delegated to core app.js)
+    function startBatchTranslation() {
+        const list = [...selectedProblems];
+        selectedProblems = [];
+        saveState();
+        updateBatchControlBar();
+        triggerBatchTranslation(list);
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // Init load
+    renderTagFilters();
+    loadProblems();
+</script>
+{% endblock %}

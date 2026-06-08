@@ -1,0 +1,388 @@
+{% extends 'base.html' %}
+
+{% block title %}Codeforces 官方比赛大厅 - CF 中文镜像站{% endblock %}
+
+{% block content %}
+<div>
+    <div class="page-header">
+        <h1 class="page-title">Codeforces 官方比赛大厅 (Contests)</h1>
+        <p class="page-subtitle">同步官方实时比赛列表，点击比赛即可浏览并智能翻译全部题目。</p>
+    </div>
+
+    <!-- Unified Contest List Panel -->
+    <div class="contest-panel">
+        <div class="panel-title" style="display: flex; align-items: center; gap: 8px;">
+            <i data-lucide="award" style="color: var(--primary); width: 20px; height: 20px;"></i>
+            <span>Codeforces 官方比赛大厅 (Contests)</span>
+        </div>
+
+        <!-- Contest Search & Filter Toolbar -->
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 16px; background-color: var(--bg-main); border: 1px solid var(--border-color); border-radius: var(--radius-md); margin-bottom: 8px;">
+            <!-- Contest Search Input -->
+            <div style="position: relative; flex-grow: 1; min-width: 240px;">
+                <i data-lucide="search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); width: 16px; height: 16px;"></i>
+                <input
+                    type="text"
+                    id="contest-search"
+                    placeholder="搜索比赛名称或 ID..."
+                    style="width: 100%; padding: 8px 12px 8px 36px; font-size: 14px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); backgroundColor: var(--bg-sidebar); outline: none; color: var(--text-primary); transition: border-color var(--transition-fast);"
+                />
+            </div>
+
+            <!-- Div Filter Tags -->
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="div-filters">
+                <button class="filter-btn active" data-div="all">全部</button>
+                <button class="filter-btn" data-div="1">Div. 1</button>
+                <button class="filter-btn" data-div="2">Div. 2</button>
+                <button class="filter-btn" data-div="3">Div. 3</button>
+                <button class="filter-btn" data-div="4">Div. 4</button>
+            </div>
+        </div>
+
+        <!-- Contest List Content Container -->
+        <div id="contest-list-container" class="contest-list" style="max-height: 600px; overflow-y: auto;">
+            <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+                <i data-lucide="refresh-cw" class="spinner" style="color: var(--primary); margin-bottom: 8px; width: 24px; height: 24px;"></i>
+                <div>正在同步 Codeforces 比赛大厅...</div>
+            </div>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div id="pagination-container" style="display: none; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+            <!-- Populated via JS -->
+        </div>
+    </div>
+
+    <!-- Contest Details Modal Overlay -->
+    <div id="contest-modal-overlay" class="modal-overlay" style="display: none; z-index: 1000;">
+        <div class="modal-content" style="max-width: 700px; width: 90%; background: var(--bg-card);">
+            <div class="modal-header">
+                <div class="modal-title-wrapper">
+                    <span class="modal-title" id="modal-contest-name">加载中...</span>
+                    <span class="modal-subtitle" id="modal-contest-subtitle">比赛 ID: #0000 · 请选择要翻译阅读的题目</span>
+                </div>
+                <button class="modal-close-btn" onclick="closeContestModal()">
+                    <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+                </button>
+            </div>
+
+            <div class="modal-body" id="modal-problems-body">
+                <!-- Populated via JS -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+    .filter-btn {
+        padding: 6px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-color);
+        background-color: var(--bg-sidebar);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+    .filter-btn.active {
+        border-color: var(--primary);
+        background-color: var(--primary-light);
+        color: var(--primary);
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allContests = [];
+    let contestSearch = '';
+    let selectedDiv = 'all';
+    let currentPage = 1;
+    const itemsPerPage = 15;
+
+    // Load contests from API
+    async function loadContests() {
+        try {
+            const response = await fetch('/api/contests');
+            if (response.ok) {
+                const data = await response.json();
+                const upcoming = data.upcoming || [];
+                const recent = data.recent || [];
+                allContests = [...upcoming, ...recent];
+                renderDashboard();
+            } else {
+                showToast('拉取 Codeforces 比赛列表失败', 'error');
+            }
+        } catch (error) {
+            console.error(error);
+            showToast('无法连接本地后端，比赛列表加载失败', 'error');
+        }
+    }
+
+    // Handle search input and filters
+    document.getElementById('contest-search').addEventListener('input', (e) => {
+        contestSearch = e.target.value;
+        currentPage = 1;
+        renderDashboard();
+    });
+
+    document.querySelectorAll('#div-filters .filter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('#div-filters .filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            selectedDiv = btn.getAttribute('data-div');
+            currentPage = 1;
+            renderDashboard();
+        });
+    });
+
+    function formatTime(timestamp) {
+        if (!timestamp) return '未定';
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleString('zh-CN', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    }
+
+    function formatDuration(seconds) {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        return `${hours}小时${minutes > 0 ? ` ${minutes}分钟` : ''}`;
+    }
+
+    // Render loop
+    function renderDashboard() {
+        const container = document.getElementById('contest-list-container');
+        
+        // Filter
+        const filtered = allContests.filter((c) => {
+            const matchesSearch = c.name.toLowerCase().includes(contestSearch.toLowerCase()) ||
+                                  c.id.toString().includes(contestSearch);
+            if (!matchesSearch) return false;
+
+            if (selectedDiv !== 'all') {
+                const regex = new RegExp(`div\\.?\\s*${selectedDiv}\\b`, 'i');
+                return regex.test(c.name);
+            }
+            return true;
+        });
+
+        // Paginate
+        const totalPages = Math.ceil(filtered.length / itemsPerPage);
+        const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+        if (paginated.length === 0) {
+            container.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-muted);">未找到匹配的比赛</div>`;
+            document.getElementById('pagination-container').style.display = 'none';
+            return;
+        }
+
+        // Render cards
+        let html = '';
+        paginated.forEach(c => {
+            let statusText = '已结束';
+            let statusClass = 'status-finished';
+            if (c.phase === 'CODING') {
+                statusText = '进行中';
+                statusClass = 'status-coding';
+            } else if (c.phase === 'BEFORE') {
+                statusText = '即将开始';
+                statusClass = 'status-before';
+            }
+
+            const timeStr = c.startTimeSeconds ? `<span>开始时间: ${formatTime(c.startTimeSeconds)}</span>` : '';
+
+            html += `
+                <div class="contest-card" onclick="handleContestClick(${c.id}, '${c.phase}', '${escapeHtml(c.name)}')" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div class="contest-info">
+                        <span class="contest-name">${escapeHtml(c.name)}</span>
+                        <div class="contest-meta">
+                            <span>ID: ${c.id}</span>
+                            ${timeStr}
+                            <span>时长: ${formatDuration(c.durationSeconds)}</span>
+                        </div>
+                    </div>
+                    <span class="contest-status-badge ${statusClass}">
+                        ${statusText}
+                    </span>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+
+        // Render pagination
+        renderPagination(totalPages);
+    }
+
+    function renderPagination(totalPages) {
+        const pagContainer = document.getElementById('pagination-container');
+        if (totalPages <= 1) {
+            pagContainer.style.display = 'none';
+            return;
+        }
+        pagContainer.style.display = 'flex';
+
+        let html = `
+            <button class="btn-secondary" ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})" style="padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: ${currentPage === 1 ? 'default' : 'pointer'}; opacity: ${currentPage === 1 ? 0.5 : 1};">
+                上一页
+            </button>
+        `;
+
+        const range = 2;
+        const pages = [1];
+        if (currentPage > range + 2) {
+            pages.push('...');
+        }
+        for (let i = Math.max(2, currentPage - range); i <= Math.min(totalPages - 1, currentPage + range); i++) {
+            pages.push(i);
+        }
+        if (currentPage < totalPages - range - 1) {
+            pages.push('...');
+        }
+        if (totalPages > 1) {
+            pages.push(totalPages);
+        }
+
+        pages.forEach(p => {
+            if (p === '...') {
+                html += `<span style="color: var(--text-muted); padding: 0 4px;">...</span>`;
+            } else {
+                const isSelected = currentPage === p;
+                html += `
+                    <button onclick="changePage(${p})" style="width: 32px; height: 32px; font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); border: 1px solid; border-color: ${isSelected ? 'var(--primary)' : 'var(--border-color)'}; background-color: ${isSelected ? 'var(--primary)' : 'var(--bg-sidebar)'}; color: ${isSelected ? 'white' : 'var(--text-secondary)'}; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        ${p}
+                    </button>
+                `;
+            }
+        });
+
+        html += `
+            <button class="btn-secondary" ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})" style="padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: ${currentPage === totalPages ? 'default' : 'pointer'}; opacity: ${currentPage === totalPages ? 0.5 : 1};">
+                下一页
+            </button>
+        `;
+
+        pagContainer.innerHTML = html;
+    }
+
+    function changePage(p) {
+        currentPage = p;
+        renderDashboard();
+    }
+
+    function handleContestClick(id, phase, name) {
+        if (phase === 'BEFORE') {
+            showToast('💡 提示：该比赛尚未开始，Codeforces 官方尚未公开题目列表，请在比赛开始后再来查看哦！', 'error');
+            return;
+        }
+        
+        document.getElementById('modal-contest-name').innerText = name;
+        document.getElementById('modal-contest-subtitle').innerText = `比赛 ID: #${id} · 请选择要翻译阅读的题目`;
+        document.getElementById('contest-modal-overlay').style.display = 'flex';
+        loadContestProblems(id);
+    }
+
+    function closeContestModal() {
+        document.getElementById('contest-modal-overlay').style.display = 'none';
+    }
+
+    // Load contest problems
+    async function loadContestProblems(contestId) {
+        const body = document.getElementById('modal-problems-body');
+        body.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; gap: 16px;">
+                <i data-lucide="refresh-cw" class="spinner" style="color: var(--primary); width: 36px; height: 36px;"></i>
+                <span style="font-size: 14px; color: var(--text-secondary);">正在同步该比赛的题目列表，请稍候...</span>
+            </div>
+        `;
+        lucide.createIcons();
+
+        try {
+            const response = await fetch(`/api/contest/${contestId}/problems`);
+            if (response.ok) {
+                const data = await response.json();
+                const problems = data.problems || [];
+                if (problems.length === 0) {
+                    body.innerHTML = `<div style="text-align: center; padding: 40px 0; color: var(--text-muted);">未获取到该比赛的题目列表</div>`;
+                    return;
+                }
+
+                let html = '<div class="problems-grid">';
+                problems.forEach(p => {
+                    let ratingClass = '';
+                    if (p.rating) {
+                        if (p.rating < 1200) ratingClass = 'rating-easy';
+                        else if (p.rating < 1900) ratingClass = 'rating-medium';
+                        else ratingClass = 'rating-hard';
+                    }
+
+                    let statusBadge = '';
+                    if (p.solved_status === 'OK') {
+                        statusBadge = '<span title="已通过 (Accepted)" style="font-size: 14px; margin-right: 4px; display: inline-flex; align-items: center;">✅</span>';
+                    } else if (p.solved_status === 'FAILED') {
+                        statusBadge = '<span title="尝试过未通过 (Attempted)" style="font-size: 14px; margin-right: 4px; display: inline-flex; align-items: center;">❌</span>';
+                    }
+
+                    const ratingBadge = p.rating 
+                        ? `<span class="problem-rating-tag ${ratingClass}">★ ${p.rating}</span>`
+                        : `<span class="problem-rating-tag" style="background-color: var(--border-hover); color: var(--text-secondary);">无评分</span>`;
+
+                    let tagsHtml = '';
+                    if (p.tags) {
+                        p.tags.slice(0, 3).forEach(tag => {
+                            tagsHtml += `<span class="problem-tag-mini">${escapeHtml(tag)}</span>`;
+                        });
+                    }
+
+                    html += `
+                        <div class="problem-item-card" onclick="window.location.href='/problem/${p.contest_id}/${p.index}'">
+                            <div class="problem-left">
+                                ${statusBadge}
+                                <div class="problem-badge-index">${p.index}</div>
+                                <div class="problem-meta-info">
+                                    <span class="problem-title-name">${escapeHtml(p.name)}</span>
+                                    <div class="problem-tags-row">
+                                        ${tagsHtml}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="problem-right">
+                                ${ratingBadge}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                body.innerHTML = html;
+            } else {
+                showToast('获取比赛题目列表失败，请稍后重试', 'error');
+                closeContestModal();
+            }
+        } catch (error) {
+            console.error(error);
+            showToast('网络错误，无法连接本地服务器', 'error');
+            closeContestModal();
+        }
+    }
+
+    // Helper to escape HTML to prevent XSS
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // Start loading
+    loadContests();
+</script>
+{% endblock %}

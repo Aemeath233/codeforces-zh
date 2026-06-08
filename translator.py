@@ -5,7 +5,11 @@ import time
 import re
 from openai import OpenAI
 from sqlalchemy.orm import Session
-from database import SystemConfig, LLMConfig
+
+try:
+    from .database import SystemConfig, LLMConfig
+except ImportError:
+    from database import SystemConfig, LLMConfig
 
 logger = logging.getLogger(__name__)
 

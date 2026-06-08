@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+
+{% block title %}📚 本地已译题目 - CF 中文镜像站{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 24px;">
+    <!-- Page Header -->
+    <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;">
+        <div>
+            <h1 class="page-title">📚 本地已译题目</h1>
+            <p class="page-subtitle">
+                您翻译并缓存的全部双语题面都在这里（当前共 <span id="cached-count">{{ problems|length }}</span> 道），支持离线极速秒开阅读。
+            </p>
+        </div>
+    </div>
+
+    {% if problems|length == 0 %}
+    <!-- Empty State -->
+    <div id="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 32px; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; boxShadow: var(--shadow-premium); text-align: center; gap: 16px;">
+        <span style="font-size: 48px;">📪</span>
+        <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary);">暂无本地已译题目历史</h3>
+        <p style="color: var(--text-secondary); font-size: 14.5px; max-width: 500px; line-height: 1.6; margin: 0 auto 8px auto;">
+            当您在“仪表盘”或“官方题库列表”中选择并翻译一道新题目后，系统便会自动将其中文翻译和原版题面**完整离线记录**到本地的数据库中，并同步显示在此处！
+        </p>
+        <div style="font-size: 13.5px; color: var(--primary); font-weight: 600; display: flex; align-items: center; gap: 6px;">
+            提示：已译题目在此页面可无网络极速秒开，无需任何 API 额度。
+        </div>
+    </div>
+    {% else %}
+    <!-- Table List -->
+    <div id="table-container" style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; boxShadow: var(--shadow-premium); overflow: hidden;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color); background-color: var(--bg-main);">
+                    <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary); width: 120px;">题号</th>
+                    <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary);">中文译名 / 原文名称</th>
+                    <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary); width: 160px;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="star" style="width: 14px; height: 14px;"></i>
+                            <span>难度评分</span>
+                        </div>
+                    </th>
+                    <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary); width: 180px;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="calendar" style="width: 14px; height: 14px;"></i>
+                            <span>翻译时间</span>
+                        </div>
+                    </th>
+                    <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary); width: 180px; text-align: center;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in problems %}
+                <tr id="row-{{ p.contest_id }}-{{ p.index }}"
+                    onclick="window.location.href='/problem/{{ p.contest_id }}/{{ p.index }}'"
+                    style="border-bottom: 1px solid var(--border-color); cursor: pointer; transition: all var(--transition-fast);"
+                    class="cached-row">
+                    <!-- Problem Index -->
+                    <td style="padding: 18px 24px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            {% if p.solved_status == 'OK' %}
+                            <span title="已通过 (Accepted)" style="display: inline-flex; font-size: 14px; cursor: default;">✅</span>
+                            {% elif p.solved_status == 'FAILED' %}
+                            <span title="尝试过未通过 (Attempted)" style="display: inline-flex; font-size: 14px; cursor: default;">❌</span>
+                            {% endif %}
+                            <span style="display: inline-block; padding: 4px 10px; background-color: var(--primary-light); color: var(--primary); font-weight: 800; font-size: 13px; border-radius: 6px; font-family: var(--font-mono);">
+                                {{ p.contest_id }}{{ p.index }}
+                            </span>
+                        </div>
+                    </td>
+
+                    <!-- Problem Title -->
+                    <td style="padding: 18px 24px;">
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <span style="font-size: 14.5px; font-weight: 700; color: var(--text-primary);">
+                                {{ p.translated_title or p.title }}
+                            </span>
+                            <span style="font-size: 12.5px; color: var(--text-secondary);">
+                                {{ p.title }}
+                            </span>
+                        </div>
+                    </td>
+
+                    <!-- Rating / Difficulty -->
+                    <td style="padding: 18px 24px;">
+                        {% if p.rating is not none %}
+                            {% set rating = p.rating %}
+                            {% if rating < 1200 %}
+                                {% set r_bg, r_txt, r_name = 'HSL(142, 70%, 94%)', 'HSL(142, 72%, 29%)', 'Novice' %}
+                            {% elif rating < 1600 %}
+                                {% set r_bg, r_txt, r_name = 'HSL(187, 75%, 94%)', 'HSL(187, 85%, 28%)', 'Medium' %}
+                            {% elif rating < 1900 %}
+                                {% set r_bg, r_txt, r_name = 'HSL(221, 80%, 94%)', 'HSL(221, 83%, 45%)', 'Expert' %}
+                            {% elif rating < 2100 %}
+                                {% set r_bg, r_txt, r_name = 'HSL(280, 70%, 94%)', 'HSL(280, 80%, 40%)', 'Candidate Master' %}
+                            {% elif rating < 2400 %}
+                                {% set r_bg, r_txt, r_name = 'HSL(38, 92%, 94%)', 'HSL(38, 92%, 40%)', 'Master' %}
+                            {% else %}
+                                {% set r_bg, r_txt, r_name = 'HSL(350, 80%, 94%)', 'HSL(350, 89%, 45%)', 'Grandmaster' %}
+                            {% endif %}
+                            <div style="display: inline-flex; align-items: center; gap: 5px; background-color: {{ r_bg }}; color: {{ r_txt }}; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700;" title="{{ r_name }}">
+                                <i data-lucide="star" style="width: 12px; height: 12px; fill: {{ r_txt }}; color: {{ r_txt }};"></i>
+                                <span>{{ p.rating }}</span>
+                            </div>
+                        {% else %}
+                            <span style="font-size: 12px; color: var(--text-muted);">-</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Cache Date -->
+                    <td style="padding: 18px 24px; font-size: 13px; color: var(--text-secondary); white-space: nowrap;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="clock" style="width: 13px; height: 13px; color: var(--text-muted);"></i>
+                            <span class="formatted-date" data-iso="{{ p.created_at }}">加载中...</span>
+                        </div>
+                    </td>
+
+                    <!-- Action Buttons -->
+                    <td style="padding: 18px 24px; text-align: center;" onclick="event.stopPropagation()">
+                        <div style="display: flex; justify-content: center; gap: 12px;">
+                            <button onclick="window.location.href='/problem/{{ p.contest_id }}/{{ p.index }}'" class="btn-secondary" style="padding: 6px 12px; font-size: 12.5px; display: flex; align-items: center; gap: 4px; border-color: var(--border-color); color: var(--primary); font-weight: 600;">
+                                <span>阅读</span>
+                                <i data-lucide="arrow-right" style="width: 12px; height: 12px;"></i>
+                            </button>
+                            <button onclick="deleteCache('{{ p.contest_id }}', '{{ p.index }}')" class="btn-secondary" style="padding: 6px; border-color: var(--border-color); color: var(--danger);" title="删除该题本地缓存">
+                                <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Format all dates in the table client-side using local time
+    document.querySelectorAll('.formatted-date').forEach(el => {
+        const iso = el.getAttribute('data-iso');
+        if (iso) {
+            try {
+                // Ensure datetime is parsed as UTC by replacing space with T and adding Z if not present
+                let cleanIso = iso.replace(' ', 'T');
+                if (!cleanIso.endsWith('Z')) cleanIso += 'Z';
+                const date = new Date(cleanIso);
+                const y = date.getFullYear();
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                const d = String(date.getDate()).padStart(2, '0');
+                const hh = String(date.getHours()).padStart(2, '0');
+                const mm = String(date.getMinutes()).padStart(2, '0');
+                el.innerText = `${y}-${m}-${d} ${hh}:${mm}`;
+            } catch (e) {
+                el.innerText = '时间格式错误';
+            }
+        } else {
+            el.innerText = '未知时间';
+        }
+    });
+
+    // Handle delete cache via fetch API
+    async function deleteCache(contestId, index) {
+        if (!confirm(`确定要清除题目 ${contestId}${index} 的本地翻译缓存吗？\n清除后，再次阅读该题将重新请求大模型进行翻译。`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/problem/${contestId}/${index}`, {
+                method: 'DELETE',
+            });
+            if (response.ok) {
+                showToast(`已成功清除题目 ${contestId}${index} 的本地缓存！`, 'success');
+                // Remove row from DOM
+                const row = document.getElementById(`row-${contestId}-${index}`);
+                if (row) {
+                    row.remove();
+                }
+                // Update count
+                const countEl = document.getElementById('cached-count');
+                if (countEl) {
+                    const currentCount = parseInt(countEl.innerText) - 1;
+                    countEl.innerText = currentCount;
+                    if (currentCount === 0) {
+                        window.location.reload(); // Reload to show empty state
+                    }
+                }
+            } else {
+                const err = await response.json();
+                showToast(err.detail || '清除本地缓存失败', 'error');
+            }
+        } catch (error) {
+            console.error(error);
+            showToast('网络错误，清除本地缓存失败', 'error');
+        }
+    }
+</script>
+{% endblock %}

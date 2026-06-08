@@ -1,0 +1,574 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ problem.index }}. {{ problem.translated_title or problem.title }} - CF 中文镜像站{% endblock %}
+
+{% block content %}
+<div class="problem-viewer-container">
+    <!-- 1. Problem Meta Header -->
+    <div class="problem-header-card">
+        <div>
+            <h1 class="page-title" style="font-size: 24px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <span>{{ problem.index }}. <span id="header-translated-title">{{ problem.translated_title or problem.title }}</span></span>
+                <span style="font-size: 14px; font-weight: normal; color: var(--text-secondary);">
+                    ({{ problem.title }})
+                </span>
+            </h1>
+
+            <div class="problem-meta-list">
+                <div class="problem-meta-item">
+                    <i data-lucide="clock" style="width: 16px; height: 16px;"></i>
+                    <span class="problem-meta-label">单点时限:</span>
+                    <span class="problem-meta-value">{{ problem.time_limit }}</span>
+                </div>
+                <div class="problem-meta-item">
+                    <i data-lucide="cpu" style="width: 16px; height: 16px;"></i>
+                    <span class="problem-meta-label">内存限制:</span>
+                    <span class="problem-meta-value">{{ problem.memory_limit }}</span>
+                </div>
+                <div class="problem-meta-item">
+                    <i data-lucide="file-text" style="width: 16px; height: 16px;"></i>
+                    <span class="problem-meta-label">标准输入/输出:</span>
+                    <span class="problem-meta-value">{{ problem.input_file }} / {{ problem.output_file }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action controls -->
+        <div class="view-actions">
+            <!-- Mode Switchers -->
+            <div style="display: flex; border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;">
+                <button
+                    id="btn-view-bilingual"
+                    class="btn-secondary"
+                    onclick="setViewMode('bilingual')"
+                    style="border: none; border-radius: 0; padding: 10px 14px;"
+                    title="双语对照模式"
+                >
+                    <i data-lucide="languages" style="width: 16px; height: 16px;"></i>
+                    <span style="font-size: 13px;">双语对照</span>
+                </button>
+                <button
+                    id="btn-view-chinese"
+                    class="btn-secondary active"
+                    onclick="setViewMode('chinese')"
+                    style="border: none; border-left: 1px solid var(--border-color); border-radius: 0; padding: 10px 14px;"
+                    title="纯中文模式"
+                >
+                    <i data-lucide="book-open" style="width: 16px; height: 16px;"></i>
+                    <span style="font-size: 13px;">中文阅读</span>
+                </button>
+                <button
+                    id="btn-view-english"
+                    class="btn-secondary"
+                    onclick="setViewMode('english')"
+                    style="border: none; border-left: 1px solid var(--border-color); border-radius: 0; padding: 10px 14px;"
+                    title="纯英文原版"
+                >
+                    <i data-lucide="layers" style="width: 16px; height: 16px;"></i>
+                    <span style="font-size: 13px;">英文原版</span>
+                </button>
+            </div>
+
+            <!-- Refresh Button -->
+            <button
+                class="btn-secondary"
+                id="force-refresh-btn"
+                onclick="forceRefreshTranslation()"
+                style="padding: 10px 14px;"
+                title="强制重抓重译"
+            >
+                <i data-lucide="refresh-cw" id="refresh-icon" style="width: 16px; height: 16px;"></i>
+                <span style="font-size: 13px;">重新翻译</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. Reader Body (Bilingual columns) -->
+    <div class="tex2jax_process" style="display: flex; flex-direction: column; gap: 24px;">
+        <div id="problem-columns-split" class="problem-reader-split single-column">
+            
+            <!-- Chinese Content Column -->
+            <div id="chinese-column" class="reader-column" style="position: relative;">
+                <div class="column-header-tab" id="chinese-header-tab" style="display: none; margin-bottom: 8px;">中文智能翻译</div>
+
+                <button onclick="copyForAI('zh')" class="copy-ai-btn" id="copy-zh-btn" style="position: absolute; top: 20px; right: 20px; z-index: 10;" title="一键复制完整中文题面及样例数据">
+                    <i data-lucide="copy" style="width: 13px; height: 13px;"></i>
+                    <span>一键复制问AI</span>
+                </button>
+
+                <div class="problem-html">
+                    <h2 style="font-size: 20px; font-weight: 800; margin-bottom: 16px; color: var(--primary);">
+                        {{ problem.translated_title or problem.title }}
+                    </h2>
+                    <div class="tex2jax_process">
+                        {{ problem.translated_description_html|safe }}
+                    </div>
+
+                    {% if problem.translated_input_spec_html %}
+                    <div class="section-subtitle">输入格式说明</div>
+                    <div class="tex2jax_process">
+                        {{ problem.translated_input_spec_html|safe }}
+                    </div>
+                    {% endif %}
+
+                    {% if problem.translated_output_spec_html %}
+                    <div class="section-subtitle">输出格式说明</div>
+                    <div class="tex2jax_process">
+                        {{ problem.translated_output_spec_html|safe }}
+                    </div>
+                    {% endif %}
+
+                    <!-- Note (hidden if bilingual note is shown at bottom) -->
+                    {% if problem.translated_note_html and not has_note %}
+                    <div class="section-subtitle" id="chinese-note-title">提示与说明</div>
+                    <div class="tex2jax_process" id="chinese-note-body">
+                        {{ problem.translated_note_html|safe }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- English Content Column -->
+            <div id="english-column" class="reader-column" style="position: relative; display: none;">
+                <div class="column-header-tab en" id="english-header-tab" style="display: none; margin-bottom: 8px;">Original English</div>
+
+                <button onclick="copyForAI('en')" class="copy-ai-btn" id="copy-en-btn" style="position: absolute; top: 20px; right: 20px; z-index: 10;" title="Copy complete English problem statement and sample data">
+                    <i data-lucide="copy" style="width: 13px; height: 13px;"></i>
+                    <span>Copy for AI</span>
+                </button>
+
+                <div class="problem-html">
+                    <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary);">
+                        {{ problem.title }}
+                    </h2>
+                    <div class="tex2jax_process">
+                        {{ problem.description_html|safe }}
+                    </div>
+
+                    {% if problem.input_spec_html %}
+                    <div class="section-subtitle" style="border-color: var(--text-secondary);">Input</div>
+                    <div class="tex2jax_process">
+                        {{ problem.input_spec_html|safe }}
+                    </div>
+                    {% endif %}
+
+                    {% if problem.output_spec_html %}
+                    <div class="section-subtitle" style="border-color: var(--text-secondary);">Output</div>
+                    <div class="tex2jax_process">
+                        {{ problem.output_spec_html|safe }}
+                    </div>
+                    {% endif %}
+
+                    <!-- Note -->
+                    {% if problem.note_html and not has_note %}
+                    <div class="section-subtitle" style="border-color: var(--text-secondary);" id="english-note-title">Note</div>
+                    <div class="tex2jax_process" id="english-note-body">
+                        {{ problem.note_html|safe }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 3. Sample Tests & Note (Always full width at bottom) -->
+        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; boxShadow: var(--shadow-premium);">
+            <!-- Samples -->
+            {% if problem.samples %}
+            <div>
+                <h2 class="panel-title" style="font-size: 18px; border-bottom: none; padding-bottom: 0; margin-bottom: 16px;">
+                    📊 评测样例数据 (Examples)
+                </h2>
+                <div class="samples-container">
+                    {% for sample in problem.samples %}
+                    <div class="sample-block">
+                        <div class="sample-header">
+                            <span>样例 #{{ loop.index }}</span>
+                        </div>
+
+                        <!-- Render dynamic sample test block -->
+                        <div class="sample-grid">
+                            <div class="sample-input-cell">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div class="sample-cell-title">输入 (Input)</div>
+                                    <button class="sample-copy-btn" onclick="copyText('{{ sample.input|replace('\n', '\\n')|replace("'", "\\'") }}', '输入')">
+                                        <i data-lucide="copy" style="width: 12px; height: 12px;"></i>
+                                        <span>复制输入</span>
+                                    </button>
+                                </div>
+                                <pre class="sample-pre">{{ sample.input }}</pre>
+                            </div>
+                            <div class="sample-output-cell">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div class="sample-cell-title">输出 (Output)</div>
+                                    <button class="sample-copy-btn" onclick="copyText('{{ sample.output|replace('\n', '\\n')|replace("'", "\\'") }}', '输出')">
+                                        <i data-lucide="copy" style="width: 12px; height: 12px;"></i>
+                                        <span>复制输出</span>
+                                    </button>
+                                </div>
+                                <pre class="sample-pre">{{ sample.output }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Note section if has_note -->
+            {% if has_note %}
+            <div id="note-bilingual-section" style="margin-top: 32px; border-top: 1px solid var(--border-color); padding-top: 24px;">
+                <h2 class="panel-title" style="font-size: 18px; border: none; padding: 0; margin-bottom: 16px;">
+                    💡 样例说明 / 提示 (Note)
+                </h2>
+                <div class="problem-reader-split" id="note-columns-split">
+                    <!-- Chinese Note -->
+                    <div class="problem-html" id="chinese-note-col">
+                        <div class="column-header-tab" style="margin-bottom: 12px;">说明 (译)</div>
+                        <div class="tex2jax_process">
+                            {{ problem.translated_note_html|safe or problem.note_html|safe }}
+                        </div>
+                    </div>
+                    <!-- English Note -->
+                    <div class="problem-html" id="english-note-col">
+                        <div class="column-header-tab en" style="margin-bottom: 12px;">Original Note</div>
+                        <div class="tex2jax_process">
+                            {{ problem.note_html|safe }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 4. Direct Codeforces Submission Panel -->
+    <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; boxShadow: var(--shadow-premium); margin-top: 24px;">
+        <h2 class="panel-title" style="font-size: 18px; border-bottom: none; padding-bottom: 0; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+            <i data-lucide="send" style="width: 18px; height: 18px;"></i>
+            提交解答至官网 (Submit Solution to Codeforces)
+        </h2>
+
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+            <!-- Account Bind Meta (Dynamically loaded by JS) -->
+            <div id="cf-account-status">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 16px; backgroundColor: var(--bg-hover); border-radius: 10px; font-size: 14px; color: var(--text-secondary);">
+                    <div class="spinner" style="width: 16px; height: 16px; border-width: 2px; margin: 0;"></div>
+                    <span>正在检测您的 Codeforces 会话状态...</span>
+                </div>
+            </div>
+
+            <!-- Form control: Compiler select -->
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <label style="font-size: 13px; font-weight: 700; color: var(--text-secondary);">
+                    选择编译器语言 (预选并自动带入官网页面)
+                </label>
+                <select
+                    id="compiler-select"
+                    onchange="saveCompilerSelection(this.value)"
+                    class="submit-select"
+                    style="width: 100%; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md); backgroundColor: var(--bg-main); color: var(--text-primary); font-weight: 600; outline: none; cursor: pointer; transition: all var(--transition-fast);"
+                >
+                    <option value="91">GNU G++23 14.2 (C++23)</option>
+                    <option value="89" selected>GNU G++20 13.2 (C++20)</option>
+                    <option value="54">GNU G++17 7.3.0 (C++17)</option>
+                    <option value="31">Python 3.8.10</option>
+                    <option value="70">PyPy 3.10 (7.3.15)</option>
+                    <option value="87">Java 21 64bit</option>
+                    <option value="60">Java 17 64bit</option>
+                    <option value="75">Rust 1.75.0</option>
+                    <option value="55">Node.js 20.11.1</option>
+                </select>
+            </div>
+
+            <!-- Jump Action Button -->
+            <button
+                onclick="submitToOfficial()"
+                class="search-button"
+                style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px; width: 100%; fontSize: 15px; fontWeight: bold; cursor: pointer;"
+            >
+                <i data-lucide="send" style="width: 16px; height: 16px;"></i>
+                立即前往官网提交本题 (Submit Solution on Codeforces)
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let viewMode = 'chinese'; // 'bilingual' | 'chinese' | 'english'
+    const contestId = {{ problem.contest_id }};
+    const problemIndex = '{{ problem.index }}';
+
+    // Set compiler dropdown from localStorage
+    const cachedCompiler = localStorage.getItem('cf_compiler_id') || '89';
+    document.getElementById('compiler-select').value = cachedCompiler;
+
+    // Load active tab highlight in sidebar/topbar
+    const activeTabItem = document.getElementById('nav-item-problem');
+    if (activeTabItem) {
+        activeTabItem.style.display = 'flex';
+        document.getElementById('nav-problem-title').innerText = `${contestId}${problemIndex}`;
+    }
+
+    // Toggle view modes
+    function setViewMode(mode) {
+        viewMode = mode;
+        
+        // Update buttons
+        document.getElementById('btn-view-bilingual').classList.remove('active');
+        document.getElementById('btn-view-chinese').classList.remove('active');
+        document.getElementById('btn-view-english').classList.remove('active');
+
+        document.getElementById(`btn-view-${mode}`).classList.add('active');
+
+        const split = document.getElementById('problem-columns-split');
+        const zhCol = document.getElementById('chinese-column');
+        const enCol = document.getElementById('english-column');
+        const zhHeader = document.getElementById('chinese-header-tab');
+        const enHeader = document.getElementById('english-header-tab');
+
+        const copyZh = document.getElementById('copy-zh-btn');
+        const copyEn = document.getElementById('copy-en-btn');
+
+        if (mode === 'bilingual') {
+            split.classList.remove('single-column');
+            zhCol.style.display = 'block';
+            enCol.style.display = 'block';
+            zhHeader.style.display = 'block';
+            enHeader.style.display = 'block';
+            copyZh.style.top = '12px';
+            copyEn.style.top = '12px';
+        } else if (mode === 'chinese') {
+            split.classList.add('single-column');
+            zhCol.style.display = 'block';
+            enCol.style.display = 'none';
+            zhHeader.style.display = 'none';
+            copyZh.style.top = '20px';
+        } else if (mode === 'english') {
+            split.classList.add('single-column');
+            zhCol.style.display = 'none';
+            enCol.style.display = 'block';
+            enHeader.style.display = 'none';
+            copyEn.style.top = '20px';
+        }
+
+        // Toggle Note layout if it exists
+        const noteSection = document.getElementById('note-bilingual-section');
+        if (noteSection) {
+            const noteSplit = document.getElementById('note-columns-split');
+            const noteZhCol = document.getElementById('chinese-note-col');
+            const noteEnCol = document.getElementById('english-note-col');
+
+            if (mode === 'bilingual') {
+                noteSplit.classList.remove('single-column');
+                noteZhCol.style.display = 'block';
+                noteEnCol.style.display = 'block';
+            } else if (mode === 'chinese') {
+                noteSplit.classList.add('single-column');
+                noteZhCol.style.display = 'block';
+                noteEnCol.style.display = 'none';
+            } else if (mode === 'english') {
+                noteSplit.classList.add('single-column');
+                noteZhCol.style.display = 'none';
+                noteEnCol.style.display = 'block';
+            }
+        }
+    }
+
+    // Force refresh translation
+    async function forceRefreshTranslation() {
+        const btn = document.getElementById('force-refresh-btn');
+        const icon = document.getElementById('refresh-icon');
+        btn.disabled = true;
+        icon.classList.add('spinner');
+
+        showToast('正在为您重构并重新翻译题面，请稍候...', 'success');
+
+        try {
+            const response = await fetch(`/api/problem/${contestId}/${problemIndex}?force_refresh=true`);
+            if (response.ok) {
+                showToast('重新翻译成功！已更新题面。', 'success');
+                window.location.reload();
+            } else {
+                const err = await response.json();
+                showToast(err.detail || '重构翻译失败，请检查配置或网络', 'error');
+            }
+        } catch (error) {
+            console.error(error);
+            showToast('网络错误，重新翻译失败', 'error');
+        } finally {
+            btn.disabled = false;
+            icon.classList.remove('spinner');
+        }
+    }
+
+    // Load active account status
+    async function loadAccountStatus() {
+        try {
+            const response = await fetch('/api/config/user');
+            if (response.ok) {
+                const data = await response.json();
+                const container = document.getElementById('cf-account-status');
+                if (data.cf_handle) {
+                    container.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background-color: var(--primary-light); border-radius: 10px; border: 1px solid HSL(221, 83%, 92%)">
+                            <div style="display: flex; align-items: center; gap: 8px; font-size: 14px;">
+                                <span style="color: var(--primary); font-weight: 700;">●</span>
+                                <span style="color: var(--text-secondary);">Codeforces 账号已连接:</span>
+                                <strong style="color: var(--primary); font-family: var(--font-sans); font-weight: 700;">${data.cf_handle}</strong>
+                            </div>
+                            <span style="font-size: 11px; color: var(--primary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                                已激活做题/AC状态同步
+                            </span>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; background-color: var(--bg-hover); border-radius: 10px; border: 1px solid var(--border-color)">
+                            <div style="display: flex; align-items: center; gap: 8px; fontSize: 13.5px; color: var(--text-secondary)">
+                                <span style="color: var(--text-muted)">○</span>
+                                <span>当前未配置 Codeforces 账号 (无法自动同步已 AC 状态)。</span>
+                            </div>
+                            <span style="font-size: 12.5px; color: var(--text-muted)">
+                                您仍可正常使用下方按钮前往官网提交。如需在列表中同步您的做题记录与 AC 标记，请前往左侧边栏的 <strong>「管理后台 (设置)」</strong> 录入您的 Codeforces Handle。
+                            </span>
+                        </div>
+                    `;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to check user config:', error);
+        }
+    }
+
+    // Save compiler selection to localstorage
+    function saveCompilerSelection(id) {
+        localStorage.setItem('cf_compiler_id', id);
+    }
+
+    // Forward to official submit
+    function submitToOfficial() {
+        const compiler = document.getElementById('compiler-select').value;
+        const url = `https://codeforces.com/contest/${contestId}/submit?submittedProblemIndex=${problemIndex}&programTypeId=${compiler}`;
+        window.open(url, '_blank');
+    }
+
+    // Copy sample test text
+    function copyText(text, type) {
+        // Resolve escaped newlines back
+        const cleanText = text.replace(/\\n/g, '\n');
+        navigator.clipboard.writeText(cleanText);
+        showToast(`已复制样例${type}到剪贴板！`, 'success');
+    }
+
+    // Format HTML elements to plain text (Markdown representation)
+    function cleanHtmlToText(html) {
+        if (!html) return '';
+        let text = html;
+        // Clean loading badges if any
+        text = text.replace(/<div style=['"]background:\s*#(eff6ff|fee2e2|fef08a)[^>]*>([\s\S]*?)<\/div>/i, '');
+        text = text.replace(/<p[^>]*>/gi, '\n');
+        text = text.replace(/<\/p>/gi, '\n');
+        text = text.replace(/<br\s*\/?>/gi, '\n');
+        text = text.replace(/<li[^>]*>/gi, '\n* ');
+        text = text.replace(/<\/li>/gi, '');
+        text = text.replace(/<ul[^>]*>/gi, '');
+        text = text.replace(/<\/ul>/gi, '\n');
+        text = text.replace(/<pre[^>]*><code[^>]*>/gi, '\n```\n');
+        text = text.replace(/<\/code><\/pre>/gi, '\n```\n');
+        text = text.replace(/<code[^>]*>/gi, '`');
+        text = text.replace(/<\/code>/gi, '`');
+        text = text.replace(/<[^>]+>/g, '');
+
+        const entities = {
+            '&quot;': '"',
+            '&amp;': '&',
+            '&lt;': '<',
+            '&gt;': '>',
+            '&nbsp;': ' ',
+            '&apos;': "'",
+            '&middot;': '·',
+            '&ldquo;': '“',
+            '&rdquo;': '”',
+            '&hellip;': '…'
+        };
+        text = text.replace(/&[a-z0-9#]+;/gi, (match) => entities[match] || match);
+        return text.split('\n').map(line => line.trim()).filter((line, i, arr) => line !== '' || arr[i-1] !== '').join('\n');
+    }
+
+    // Copy complete problem in Markdown formatting for AI chat query
+    function copyForAI(lang) {
+        const title = lang === 'zh' ? '{{ problem.translated_title or problem.title }}' : '{{ problem.title }}';
+        
+        let descHtml = lang === 'zh' ? `{{ problem.translated_description_html|safe }}` : `{{ problem.description_html|safe }}`;
+        descHtml = descHtml.replace(/^<div style=['"]background:\s*#(eff6ff|fee2e2|fef08a)[^>]*>([\s\S]*?)<\/div>/i, '');
+        descHtml = descHtml.replace(/^<div style=['"][^'"]*['"]>\s*.*?(?:智能加速翻译|系统提示|多API回退告警|智能翻译节点).*?<\/div>/i, '');
+
+        const desc = cleanHtmlToText(descHtml);
+        
+        const inputSpecHtml = lang === 'zh' ? `{{ problem.translated_input_spec_html|safe }}` : `{{ problem.input_spec_html|safe }}`;
+        const inputSpec = cleanHtmlToText(inputSpecHtml);
+        
+        const outputSpecHtml = lang === 'zh' ? `{{ problem.translated_output_spec_html|safe }}` : `{{ problem.output_spec_html|safe }}`;
+        const outputSpec = cleanHtmlToText(outputSpecHtml);
+        
+        const noteHtml = lang === 'zh' ? `{{ problem.translated_note_html|safe or problem.note_html|safe }}` : `{{ problem.note_html|safe }}`;
+        const note = cleanHtmlToText(noteHtml);
+
+        let fullMarkdown = lang === 'zh' ? `# 题目: ${title}\n` : `# Problem: ${title}\n`;
+        fullMarkdown += lang === 'zh' 
+            ? `**时间限制**: {{ problem.time_limit }} | **内存限制**: {{ problem.memory_limit }}\n\n`
+            : `**Time Limit**: {{ problem.time_limit }} | **Memory Limit**: {{ problem.memory_limit }}\n\n`;
+        
+        fullMarkdown += lang === 'zh' ? `## 题目描述\n${desc}\n\n` : `## Description\n${desc}\n\n`;
+
+        if (inputSpec) {
+            fullMarkdown += lang === 'zh' ? `## 输入格式说明\n${inputSpec}\n\n` : `## Input\n${inputSpec}\n\n`;
+        }
+        if (outputSpec) {
+            fullMarkdown += lang === 'zh' ? `## 输出格式说明\n${outputSpec}\n\n` : `## Output\n${outputSpec}\n\n`;
+        }
+        
+        const hasNoteSection = {% if has_note %}true{% else %}false{% endif %};
+        if (note && hasNoteSection) {
+            fullMarkdown += lang === 'zh' ? `## 提示与说明\n${note}\n\n` : `## Note\n${note}\n\n`;
+        }
+
+        // Add Samples
+        const samples = [];
+        {% if problem.samples %}
+            {% for sample in problem.samples %}
+            samples.push({
+                input: `{{ sample.input|replace('\n', '\\n')|replace("'", "\\'") }}`,
+                output: `{{ sample.output|replace('\n', '\\n')|replace("'", "\\'") }}`
+            });
+            {% endfor %}
+        {% endif %}
+
+        if (samples.length > 0) {
+            fullMarkdown += lang === 'zh' ? `## 评测样例数据 (Examples)\n` : `## Examples\n`;
+            samples.forEach((sample, idx) => {
+                const cleanInput = sample.input.replace(/\\n/g, '\n');
+                const cleanOutput = sample.output.replace(/\\n/g, '\n');
+                fullMarkdown += `### Example #${idx + 1}\n`;
+                fullMarkdown += `**Input**:\n\`\`\`\n${cleanInput}\n\`\`\`\n`;
+                fullMarkdown += `**Output**:\n\`\`\`\n${cleanOutput}\n\`\`\`\n\n`;
+            });
+        }
+
+        navigator.clipboard.writeText(fullMarkdown.trim());
+        const toastMsg = lang === 'zh' 
+            ? '中文题面（含格式化 Markdown）已一键复制到剪贴板！'
+            : 'Original English problem (formatted Markdown) copied!';
+        showToast(toastMsg, 'success');
+    }
+
+    // Set initial view mode
+    setViewMode('chinese');
+
+    // Init load
+    loadAccountStatus();
+</script>
+{% endblock %}

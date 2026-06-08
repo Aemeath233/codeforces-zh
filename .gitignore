@@ -23,8 +23,8 @@ build/
 .eslintcache
 
 # Local Databases and Configs
-backend/cf_mirror.db
-backend/backend_app.log
+cf_mirror.db
+backend_app.log
 .env
 .env.local
 .env.development.local
