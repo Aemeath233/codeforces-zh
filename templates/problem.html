@@ -80,6 +80,17 @@
                 <i data-lucide="refresh-cw" id="refresh-icon" style="width: 16px; height: 16px;"></i>
                 <span style="font-size: 13px;">重新翻译</span>
             </button>
+
+            <!-- Submit Button (Header) -->
+            <button
+                class="search-button"
+                onclick="submitToOfficial()"
+                style="padding: 10px 14px; display: flex; align-items: center; gap: 6px; text-decoration: none;"
+                title="前往官网提交本题"
+            >
+                <i data-lucide="send" style="width: 16px; height: 16px;"></i>
+                <span style="font-size: 13px;">前往提交</span>
+            </button>
         </div>
     </div>
 
@@ -242,55 +253,17 @@
         </div>
     </div>
 
-    <!-- 4. Direct Codeforces Submission Panel -->
-    <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; boxShadow: var(--shadow-premium); margin-top: 24px;">
-        <h2 class="panel-title" style="font-size: 18px; border-bottom: none; padding-bottom: 0; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
-            <i data-lucide="send" style="width: 18px; height: 18px;"></i>
-            提交解答至官网 (Submit Solution to Codeforces)
-        </h2>
-
-        <div style="display: flex; flex-direction: column; gap: 20px;">
-            <!-- Account Bind Meta (Dynamically loaded by JS) -->
-            <div id="cf-account-status">
-                <div style="display: flex; align-items: center; gap: 10px; padding: 16px; backgroundColor: var(--bg-hover); border-radius: 10px; font-size: 14px; color: var(--text-secondary);">
-                    <div class="spinner" style="width: 16px; height: 16px; border-width: 2px; margin: 0;"></div>
-                    <span>正在检测您的 Codeforces 会话状态...</span>
-                </div>
-            </div>
-
-            <!-- Form control: Compiler select -->
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-                <label style="font-size: 13px; font-weight: 700; color: var(--text-secondary);">
-                    选择编译器语言 (预选并自动带入官网页面)
-                </label>
-                <select
-                    id="compiler-select"
-                    onchange="saveCompilerSelection(this.value)"
-                    class="submit-select"
-                    style="width: 100%; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md); backgroundColor: var(--bg-main); color: var(--text-primary); font-weight: 600; outline: none; cursor: pointer; transition: all var(--transition-fast);"
-                >
-                    <option value="91">GNU G++23 14.2 (C++23)</option>
-                    <option value="89" selected>GNU G++20 13.2 (C++20)</option>
-                    <option value="54">GNU G++17 7.3.0 (C++17)</option>
-                    <option value="31">Python 3.8.10</option>
-                    <option value="70">PyPy 3.10 (7.3.15)</option>
-                    <option value="87">Java 21 64bit</option>
-                    <option value="60">Java 17 64bit</option>
-                    <option value="75">Rust 1.75.0</option>
-                    <option value="55">Node.js 20.11.1</option>
-                </select>
-            </div>
-
-            <!-- Jump Action Button -->
-            <button
-                onclick="submitToOfficial()"
-                class="search-button"
-                style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px; width: 100%; fontSize: 15px; fontWeight: bold; cursor: pointer;"
-            >
-                <i data-lucide="send" style="width: 16px; height: 16px;"></i>
-                立即前往官网提交本题 (Submit Solution on Codeforces)
-            </button>
-        </div>
+    <!-- 4. Compact Bottom Submit Button -->
+    <div style="display: flex; justify-content: center; margin-top: 24px;">
+        <button
+            onclick="submitToOfficial()"
+            class="search-button"
+            style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 28px; font-size: 14px; font-weight: 600; cursor: pointer;"
+            title="立即前往官网提交本题"
+        >
+            <i data-lucide="send" style="width: 16px; height: 16px;"></i>
+            提交解答至 Codeforces 官网 (Submit Solution)
+        </button>
     </div>
 </div>
 {% endblock %}
@@ -300,10 +273,6 @@
     let viewMode = 'chinese'; // 'bilingual' | 'chinese' | 'english'
     const contestId = {{ problem.contest_id }};
     const problemIndex = '{{ problem.index }}';
-
-    // Set compiler dropdown from localStorage
-    const cachedCompiler = localStorage.getItem('cf_compiler_id') || '89';
-    document.getElementById('compiler-select').value = cachedCompiler;
 
     // Load active tab highlight in sidebar/topbar
     const activeTabItem = document.getElementById('nav-item-problem');
@@ -404,53 +373,9 @@
         }
     }
 
-    // Load active account status
-    async function loadAccountStatus() {
-        try {
-            const response = await fetch('/api/config/user');
-            if (response.ok) {
-                const data = await response.json();
-                const container = document.getElementById('cf-account-status');
-                if (data.cf_handle) {
-                    container.innerHTML = `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background-color: var(--primary-light); border-radius: 10px; border: 1px solid HSL(221, 83%, 92%)">
-                            <div style="display: flex; align-items: center; gap: 8px; font-size: 14px;">
-                                <span style="color: var(--primary); font-weight: 700;">●</span>
-                                <span style="color: var(--text-secondary);">Codeforces 账号已连接:</span>
-                                <strong style="color: var(--primary); font-family: var(--font-sans); font-weight: 700;">${data.cf_handle}</strong>
-                            </div>
-                            <span style="font-size: 11px; color: var(--primary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
-                                已激活做题/AC状态同步
-                            </span>
-                        </div>
-                    `;
-                } else {
-                    container.innerHTML = `
-                        <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; background-color: var(--bg-hover); border-radius: 10px; border: 1px solid var(--border-color)">
-                            <div style="display: flex; align-items: center; gap: 8px; fontSize: 13.5px; color: var(--text-secondary)">
-                                <span style="color: var(--text-muted)">○</span>
-                                <span>当前未配置 Codeforces 账号 (无法自动同步已 AC 状态)。</span>
-                            </div>
-                            <span style="font-size: 12.5px; color: var(--text-muted)">
-                                您仍可正常使用下方按钮前往官网提交。如需在列表中同步您的做题记录与 AC 标记，请前往左侧边栏的 <strong>「管理后台 (设置)」</strong> 录入您的 Codeforces Handle。
-                            </span>
-                        </div>
-                    `;
-                }
-            }
-        } catch (error) {
-            console.error('Failed to check user config:', error);
-        }
-    }
-
-    // Save compiler selection to localstorage
-    function saveCompilerSelection(id) {
-        localStorage.setItem('cf_compiler_id', id);
-    }
-
     // Forward to official submit
     function submitToOfficial() {
-        const compiler = document.getElementById('compiler-select').value;
+        const compiler = localStorage.getItem('cf_compiler_id') || '89';
         const url = `https://codeforces.com/contest/${contestId}/submit?submittedProblemIndex=${problemIndex}&programTypeId=${compiler}`;
         window.open(url, '_blank');
     }
@@ -567,8 +492,5 @@
 
     // Set initial view mode
     setViewMode('chinese');
-
-    // Init load
-    loadAccountStatus();
 </script>
 {% endblock %}

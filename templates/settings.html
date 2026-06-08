@@ -37,6 +37,30 @@
                     </span>
                 </div>
 
+                <div class="form-group" style="max-width: 400px;">
+                    <label class="form-label" for="cfCompiler">
+                        默认提交编译器 (Compiler)
+                    </label>
+                    <select
+                        id="cfCompiler"
+                        class="form-input"
+                        style="font-weight: 600; cursor: pointer;"
+                    >
+                        <option value="91">GNU G++23 14.2 (C++23)</option>
+                        <option value="89">GNU G++20 13.2 (C++20)</option>
+                        <option value="54">GNU G++17 7.3.0 (C++17)</option>
+                        <option value="31">Python 3.8.10</option>
+                        <option value="70">PyPy 3.10 (7.3.15)</option>
+                        <option value="87">Java 21 64bit</option>
+                        <option value="60">Java 17 64bit</option>
+                        <option value="75">Rust 1.75.0</option>
+                        <option value="55">Node.js 20.11.1</option>
+                    </select>
+                    <span style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: inline-block;">
+                        用于在题目详情页中点击“前往提交”时预选并自动带入官网页面。
+                    </span>
+                </div>
+
                 <!-- Advanced Section Toggle -->
                 <div style="margin-top: 4px;">
                     <button
@@ -256,6 +280,10 @@
 
 {% block scripts %}
 <script>
+    // Load cached compiler settings on initialization
+    const cachedCompiler = localStorage.getItem('cf_compiler_id') || '89';
+    document.getElementById('cfCompiler').value = cachedCompiler;
+
     // Toggle advanced section
     let isAdvancedOpen = false;
     function toggleAdvanced() {
@@ -275,12 +303,16 @@
     async function saveUserAuth(e) {
         e.preventDefault();
         const handle = document.getElementById('cfHandle').value.trim();
+        const compiler = document.getElementById('cfCompiler').value;
         let cookies = document.getElementById('cfCookies').value;
 
         if (!handle) {
             showToast('用户名 (Handle) 不能为空！', 'error');
             return;
         }
+
+        // Save compiler choice to localstorage
+        localStorage.setItem('cf_compiler_id', compiler);
 
         const btn = document.getElementById('save-user-btn');
         btn.innerText = '正在保存凭证...';
