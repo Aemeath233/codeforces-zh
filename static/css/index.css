@@ -79,51 +79,13 @@ input, button, select, textarea {
   padding: 0 24px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   position: fixed;
   width: 100%;
   left: 0;
   top: 0;
   z-index: 100;
   box-shadow: var(--shadow-sm);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.brand-icon {
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, var(--primary), HSL(240, 80%, 65%));
-  color: white;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 15px;
-  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.2);
-}
-
-.brand-name {
-  font-family: 'Outfit', sans-serif;
-  font-weight: 800;
-  font-size: 16px;
-  color: var(--text-primary);
-  letter-spacing: -0.5px;
-  line-height: 1.2;
-}
-
-.brand-subtitle {
-  font-size: 9px;
-  color: var(--primary);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  display: block;
 }
 
 .nav-list {
@@ -159,6 +121,10 @@ input, button, select, textarea {
 }
 
 .navbar-right {
+  position: absolute;
+  right: 24px;
+  top: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   gap: 16px;
