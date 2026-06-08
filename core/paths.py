@@ -13,7 +13,7 @@ def is_frozen() -> bool:
 def get_resource_root() -> Path:
     if is_frozen():
         return Path(getattr(sys, "_MEIPASS")).resolve()
-    return Path(__file__).resolve().parent
+    return Path(__file__).resolve().parent.parent
 
 
 def get_data_dir() -> Path:
@@ -28,7 +28,7 @@ def get_data_dir() -> Path:
             base = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
             data_dir = Path(base) / APP_NAME
     else:
-        data_dir = Path(__file__).resolve().parent
+        data_dir = Path(__file__).resolve().parent.parent
 
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
@@ -39,7 +39,7 @@ def get_data_path(filename: str) -> Path:
 
 
 def get_frontend_dist() -> Path:
-    # Retained for compatibility/desktop.py checks if needed
+    # Retained for compatibility if needed
     configured = os.getenv("CF_MIRROR_FRONTEND_DIST")
     if configured:
         return Path(configured).expanduser().resolve()

@@ -2,10 +2,10 @@ import json
 import logging
 from flask import Blueprint, render_template, redirect, url_for
 
-from database import get_flask_db as get_db, SystemConfig, LLMConfig, CachedProblem, ProblemsetLibrary
-from scraper import scrape_cf_problem
-from translator import translate_problem
-from cf_sync import get_user_solved_status_map, get_active_translations
+from .database import get_flask_db as get_db, SystemConfig, LLMConfig, CachedProblem, ProblemsetLibrary
+from .scraper import scrape_cf_problem
+from .translator import translate_problem
+from .cf_sync import get_user_solved_status_map, get_active_translations
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +30,10 @@ def view_dashboard():
 @pages_bp.route("/cached")
 def view_cached_problems():
     db = get_db()
-    # Query cached problems
     cached_list = db.query(CachedProblem, ProblemsetLibrary.rating).outerjoin(
         ProblemsetLibrary, CachedProblem.id == ProblemsetLibrary.id
     ).order_by(CachedProblem.created_at.desc()).all()
 
-    # Get solved status map
     status_map = get_user_solved_status_map(db)
 
     problems = []

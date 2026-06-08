@@ -70,9 +70,9 @@ def scrape_cf_problem(contest_id: int, index: str) -> dict:
             # Add a small delay to respect CF's rate limit
             time.sleep(0.5)
             
+            # Use standard HEADERS and a timeout
             response = requests.get(url, headers=HEADERS, timeout=15.0)
             if response.status_code == 200:
-                # Check if it's the actual problem statement or a redirect to the list page
                 if "problem-statement" in response.text:
                     html = response.text
                     break
@@ -166,7 +166,6 @@ def scrape_cf_problem(contest_id: int, index: str) -> dict:
             outputs = test_node.find_all("div", class_="output")
             
             for inp, outp in zip(inputs, outputs):
-                # Clean up <pre> structure. Codeforces wraps text in <pre>, sometimes with <br/> or nested divs for lines.
                 pre_in = inp.find("pre") or inp
                 pre_out = outp.find("pre") or outp
                 
@@ -174,21 +173,17 @@ def scrape_cf_problem(contest_id: int, index: str) -> dict:
                 def extract_pre_info(pre_elem):
                     if not pre_elem:
                         return "", []
-                    # Handle <br/> to actual newlines
                     for br in pre_elem.find_all("br"):
                         try:
                             br.replace_with("\n")
                         except Exception:
                             pass
                     
-                    # Exclude the title div if pre_elem is the parent inp/outp div
                     title_div = pre_elem.find("div", class_="title")
                     title_len = 0
                     if title_div:
-                        # Extract title text length to slice off
                         title_len = len(title_div.text)
                     
-                    # Some inputs/outputs are split into divs by Codeforces
                     nested_divs = pre_elem.find_all("div", class_="test-example-line")
                     if nested_divs:
                         lines_data = []
@@ -208,13 +203,11 @@ def scrape_cf_problem(contest_id: int, index: str) -> dict:
                     
                     raw_text = pre_elem.text
                     if title_len > 0 and raw_text.strip().startswith(title_div.text.strip()):
-                        # Safely slice off the header title text
                         start_idx = raw_text.find(title_div.text) + title_len
                         raw_text = raw_text[start_idx:].strip()
                     else:
                         raw_text = raw_text.strip()
                         
-                    # Split raw text by newlines and assign none class
                     lines_data = [{"text": line, "class": "none"} for line in raw_text.split("\n")]
                     return raw_text, lines_data
                     

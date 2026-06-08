@@ -5,14 +5,11 @@ from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, B
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-try:
-    from .paths import get_data_path
-except ImportError:
-    from paths import get_data_path
+from .paths import get_data_path
 
 Base = declarative_base()
 
-# In source mode this stays at CF/backend/cf_mirror.db. In a frozen desktop
+# In source mode this stays at CF/cf_mirror.db. In a frozen desktop
 # build it moves to a writable user data directory so the database persists.
 db_path = str(get_data_path("cf_mirror.db"))
 DATABASE_URL = f"sqlite:///{db_path.replace('\\', '/')}"
@@ -158,4 +155,3 @@ def get_flask_db():
     if 'db' not in g:
         g.db = SessionLocal()
     return g.db
-

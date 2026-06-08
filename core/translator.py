@@ -6,10 +6,7 @@ import re
 from openai import OpenAI
 from sqlalchemy.orm import Session
 
-try:
-    from .database import SystemConfig, LLMConfig
-except ImportError:
-    from database import SystemConfig, LLMConfig
+from .database import SystemConfig, LLMConfig
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +29,6 @@ def heal_latex_colors(text: str) -> str:
         healed,
         flags=re.IGNORECASE
     )
-    # Some models emit \color{red}x where MathJax's color package applies the color to following tokens.
-    # Keep that form intact; MathJax handles it once the color package is loaded.
     return healed
 
 def get_mock_translation(problem_data: dict, error_logs: list = None) -> dict:
@@ -50,7 +45,7 @@ def get_mock_translation(problem_data: dict, error_logs: list = None) -> dict:
             "<ul style='margin-left: 20px; margin-top: 6px;'>"
             + "".join([f"<li><b>{name}</b>: {err}</li>" for name, err in error_logs]) +
             "</ul>"
-            "已为您平滑回退至系统<b>模拟翻译模式</b>。请前往“管理后台”修复密钥。"
+            "已为您平滑回退至系统<b>模拟翻译模式</b>。请前往“管理后台”修复密钥格式或联系网络管理员。"
             "</div>"
         )
     else:
@@ -90,7 +85,6 @@ def translate_problem(problem_data: dict, db: Session) -> dict:
     
     # Loop through configs
     for config in active_configs:
-        # Check if the api_key is default/configured
         if not config.api_key or config.api_key.strip() in ("", "your_api_key_here"):
             logger.info(f"Skipping LLM Config '{config.name}' because API Key is not set.")
             continue
@@ -122,8 +116,6 @@ def translate_problem(problem_data: dict, db: Session) -> dict:
                 f"Output your translation as a single JSON object matching the input keys."
             )
             
-            # Make a single standard call. Our prompt strictly enforces JSON output, 
-            # which is 100% supported by all modern models without protocol-level JSON-Mode errors.
             response = client.chat.completions.create(
                 model=config.model.strip(),
                 messages=[
@@ -136,16 +128,13 @@ def translate_problem(problem_data: dict, db: Session) -> dict:
                 
             res_content = response.choices[0].message.content.strip()
             
-            # Clean up and extract JSON from LLM response
             def extract_and_parse_json(text: str) -> dict:
                 text_str = text.strip()
-                # Try direct parse first
                 try:
                     return json.loads(text_str)
                 except Exception:
                     pass
                 
-                # Strip markdown code blocks
                 if text_str.startswith("```json"):
                     text_str = text_str[7:]
                 elif text_str.startswith("```"):
@@ -158,7 +147,6 @@ def translate_problem(problem_data: dict, db: Session) -> dict:
                 except Exception:
                     pass
                     
-                # Regex boundary search: extract from first { to last }
                 first_brace = text_str.find("{")
                 last_brace = text_str.rfind("}")
                 if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
@@ -178,7 +166,6 @@ def translate_problem(problem_data: dict, db: Session) -> dict:
             elapsed_time = time.time() - start_total_t
             logger.info(f"All fields translated as a single JSON request in {elapsed_time:.2f}s!")
             
-            # Inject premium badge
             success_badge = (
                 f"<div style='background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; padding: 6px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px;'>"
                 f"<span>🚀</span> [智能加速翻译 v2] 本题已启用全新单次 JSON 上下文联合翻译优化，耗时 <b>{elapsed_time:.2f} 秒</b>，由大模型 <b>{config.name} ({config.model})</b> 翻译并进行格式保护"
@@ -201,16 +188,10 @@ def translate_problem(problem_data: dict, db: Session) -> dict:
             error_logs.append((config.name, str(e)))
             continue
             
-    # If all configured LLMs failed
     return get_mock_translation(problem_data, error_logs)
 
 
 def test_llm_connection(api_key: str, base_url: str, model: str) -> str:
-    """
-    Validates connection parameters by sending a extremely lightweight prompt.
-    Instructs the LLM to reply exactly with '收到' to verify connection and key authenticity.
-    Returns the exact string replied by the LLM.
-    """
     try:
         client = OpenAI(
             api_key=api_key.strip(),

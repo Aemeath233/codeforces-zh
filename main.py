@@ -2,9 +2,9 @@ import logging
 from logging.handlers import RotatingFileHandler
 from flask import Flask, request, jsonify, g
 
-from database import init_db
-from pages import pages_bp
-from api import api_bp
+from core.database import init_db
+from core.pages import pages_bp
+from core.api import api_bp
 
 # Advanced Logging Configuration
 log_formatter = logging.Formatter(
@@ -32,7 +32,7 @@ app.register_blueprint(api_bp)
 # Helper to get DB session inside Flask request lifecycle (for compatibility if imported elsewhere)
 def get_db():
     if 'db' not in g:
-        from database import SessionLocal
+        from core.database import SessionLocal
         g.db = SessionLocal()
     return g.db
 

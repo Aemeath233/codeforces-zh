@@ -6,10 +6,10 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from flask import Blueprint, request, jsonify
 
-from database import get_flask_db as get_db, SystemConfig, LLMConfig, CachedProblem, ProblemsetLibrary, ContestCache
-from scraper import scrape_cf_problem, HEADERS as CRAWLER_HEADERS
-from translator import translate_problem, test_llm_connection, heal_latex_colors
-from cf_sync import (
+from .database import get_flask_db as get_db, SystemConfig, LLMConfig, CachedProblem, ProblemsetLibrary, ContestCache
+from .scraper import scrape_cf_problem, HEADERS as CRAWLER_HEADERS
+from .translator import translate_problem, test_llm_connection, heal_latex_colors
+from .cf_sync import (
     get_user_solved_status_map,
     sync_problemset_library_internal,
     get_active_translations,
@@ -239,7 +239,6 @@ def api_status_sync():
                 "status": cache.get("status", "pending")
             })
         else:
-            # Trigger background sync if handles mismatch
             trigger_bg_fetch_user_status(handle)
             return jsonify({
                 "handle": handle,
@@ -504,7 +503,6 @@ def api_contest_problems(contest_id):
     logger.info(f"Fetching problem list for contest {contest_id}...")
     status_map = get_user_solved_status_map(db)
 
-    # Step 1: Check local database (ProblemsetLibrary)
     try:
         local_probs = db.query(ProblemsetLibrary).filter(ProblemsetLibrary.contest_id == contest_id).all()
         if local_probs:
@@ -546,7 +544,6 @@ def api_contest_problems(contest_id):
     except Exception as db_err:
         logger.error(f"Error querying local DB for contest problems: {str(db_err)}")
 
-    # Step 2: Fallback to scraping the mirror contest page
     mirror_url = f"https://mirror.codeforces.com/contest/{contest_id}?locale=en"
     try:
         logger.info(f"Cache miss or empty local library. Scraping mirror contest page: {mirror_url}")
@@ -596,7 +593,6 @@ def api_contest_problems(contest_id):
     except Exception as scrap_err:
         logger.error(f"Failed to scrape mirror contest page: {str(scrap_err)}")
 
-    # Step 3: Fallback to official standings API
     cf_standings_url = f"https://codeforces.com/api/contest.standings?contestId={contest_id}"
     try:
         logger.info(f"Scraping failed. Falling back to official standings API: {cf_standings_url}")
@@ -643,7 +639,6 @@ def api_get_problem(contest_id, index):
     index_upper = index.strip().upper()
     problem_id = f"{contest_id}_{index_upper}"
 
-    # 1. Quick check cache first without lock
     if not force_refresh:
         cached = db.query(CachedProblem).filter(CachedProblem.id == problem_id).first()
         if cached:
@@ -673,7 +668,6 @@ def api_get_problem(contest_id, index):
                 }
             })
 
-    # 2. Acquire or create a lock for this specific problem_id to prevent parallel race condition
     active_translations, active_translations_lock = get_active_translations()
     with active_translations_lock:
         if problem_id not in active_translations:
@@ -682,7 +676,6 @@ def api_get_problem(contest_id, index):
 
     with problem_lock:
         try:
-            # Double-check cache inside lock
             if not force_refresh:
                 cached = db.query(CachedProblem).filter(CachedProblem.id == problem_id).first()
                 if cached:
@@ -712,7 +705,6 @@ def api_get_problem(contest_id, index):
                         }
                     })
 
-            # Cache miss - proceed to scrape and translate
             logger.info(f"Cache miss for problem (executing translation): {problem_id}")
             try:
                 scraped_data = scrape_cf_problem(contest_id, index_upper)
@@ -722,7 +714,6 @@ def api_get_problem(contest_id, index):
 
             translated_data = translate_problem(scraped_data, db)
 
-            # Save to Cache ONLY if it's not a mock fallback!
             is_mock = translated_data.get("is_mock", False)
             if not is_mock:
                 existing = db.query(CachedProblem).filter(CachedProblem.id == problem_id).first()
@@ -794,3 +785,22 @@ def api_delete_problem(contest_id, index):
     db.delete(cached)
     db.commit()
     return jsonify({"status": "success", "message": "已成功清除该题目的本地缓存"})
+
+
+@api_bp.route("/api/problems", methods=["DELETE"])
+def api_delete_problems():
+    db = get_db()
+    payload = request.json or {}
+    ids = payload.get("ids", [])
+    delete_all = payload.get("all", False)
+
+    if delete_all:
+        num_deleted = db.query(CachedProblem).delete()
+        db.commit()
+        return jsonify({"status": "success", "message": f"已成功清除全部 {num_deleted} 道题目的本地缓存"})
+    elif ids:
+        num_deleted = db.query(CachedProblem).filter(CachedProblem.id.in_(ids)).delete(synchronize_session=False)
+        db.commit()
+        return jsonify({"status": "success", "message": f"已成功清除 {num_deleted} 道题目的本地缓存"})
+    else:
+        return jsonify({"detail": "未指定要删除的题目列表"}), 400

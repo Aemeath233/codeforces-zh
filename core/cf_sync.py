@@ -5,7 +5,7 @@ import threading
 import requests
 from datetime import datetime
 
-from database import SystemConfig, ProblemsetLibrary, ContestCache, CachedProblem
+from .database import SystemConfig, ProblemsetLibrary, ContestCache, CachedProblem
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,6 @@ def _bg_fetch_user_status(handle: str):
             if data.get("status") == "OK":
                 submissions = data.get("result", [])
                 status_map = {}
-                # Sort submissions chronologically so that later OKs overwrite previous FAILEDs
                 for s in reversed(submissions):
                     contest_id = s.get("contestId")
                     prob = s.get("problem", {})

@@ -12,6 +12,20 @@
                 您翻译并缓存的全部双语题面都在这里（当前共 <span id="cached-count">{{ problems|length }}</span> 道），支持离线极速秒开阅读。
             </p>
         </div>
+        
+        {% if problems|length > 0 %}
+        <!-- Batch Actions -->
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <button id="btn-delete-selected" class="btn-secondary" style="display: none; padding: 8px 16px; border-color: var(--danger); color: var(--danger); font-weight: 600; font-size: 13.5px; align-items: center; gap: 6px;" onclick="deleteSelected()">
+                <i data-lucide="trash-2" style="width: 15px; height: 15px;"></i>
+                <span>删除选中 (<span id="selected-count">0</span>)</span>
+            </button>
+            <button id="btn-delete-all" class="btn-secondary" style="padding: 8px 16px; border-color: var(--danger); color: var(--danger); font-weight: 600; font-size: 13.5px; align-items: center; gap: 6px;" onclick="deleteAllCache()">
+                <i data-lucide="trash-2" style="width: 15px; height: 15px;"></i>
+                <span>全部清除</span>
+            </button>
+        </div>
+        {% endif %}
     </div>
 
     {% if problems|length == 0 %}
@@ -32,6 +46,10 @@
         <table style="width: 100%; border-collapse: collapse; text-align: left;">
             <thead>
                 <tr style="border-bottom: 1px solid var(--border-color); background-color: var(--bg-main);">
+                    <!-- Checkbox Header -->
+                    <th style="padding: 16px 24px; width: 50px; text-align: center;">
+                        <input type="checkbox" id="select-all" onclick="toggleSelectAll(this)" style="cursor: pointer; transform: scale(1.15); accent-color: var(--primary);">
+                    </th>
                     <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary); width: 120px;">题号</th>
                     <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary);">中文译名 / 原文名称</th>
                     <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary); width: 160px;">
@@ -55,6 +73,11 @@
                     onclick="window.location.href='/problem/{{ p.contest_id }}/{{ p.index }}'"
                     style="border-bottom: 1px solid var(--border-color); cursor: pointer; transition: all var(--transition-fast);"
                     class="cached-row">
+                    <!-- Checkbox Cell -->
+                    <td style="padding: 18px 24px; text-align: center;" onclick="event.stopPropagation()">
+                        <input type="checkbox" class="problem-checkbox" data-id="{{ p.id }}" onclick="updateSelectionStatus()" style="cursor: pointer; transform: scale(1.15); accent-color: var(--primary);">
+                    </td>
+                    
                     <!-- Problem Index -->
                     <td style="padding: 18px 24px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
@@ -122,7 +145,7 @@
                                 <span>阅读</span>
                                 <i data-lucide="arrow-right" style="width: 12px; height: 12px;"></i>
                             </button>
-                            <button onclick="deleteCache('{{ p.contest_id }}', '{{ p.index }}')" class="btn-secondary" style="padding: 6px; border-color: var(--border-color); color: var(--danger);" title="删除该题本地缓存">
+                            <button onclick="deleteCache('{{ p.contest_id }}', '{{ p.index }}', '{{ p.id }}')" class="btn-secondary" style="padding: 6px; border-color: var(--border-color); color: var(--danger);" title="删除该题本地缓存">
                                 <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
                             </button>
                         </div>
@@ -143,7 +166,6 @@
         const iso = el.getAttribute('data-iso');
         if (iso) {
             try {
-                // Ensure datetime is parsed as UTC by replacing space with T and adding Z if not present
                 let cleanIso = iso.replace(' ', 'T');
                 if (!cleanIso.endsWith('Z')) cleanIso += 'Z';
                 const date = new Date(cleanIso);
@@ -161,9 +183,120 @@
         }
     });
 
-    // Handle delete cache via fetch API
-    async function deleteCache(contestId, index) {
-        if (!confirm(`确定要清除题目 ${contestId}${index} 的本地翻译缓存吗？\n清除后，再次阅读该题将重新请求大模型进行翻译。`)) {
+    // Toggle select/unselect all checkboxes
+    function toggleSelectAll(master) {
+        document.querySelectorAll('.problem-checkbox').forEach(cb => {
+            cb.checked = master.checked;
+        });
+        updateSelectionStatus();
+    }
+
+    // Update selection state and display/hide batch delete button
+    function updateSelectionStatus() {
+        const checkboxes = document.querySelectorAll('.problem-checkbox');
+        const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+        
+        const btnDeleteSelected = document.getElementById('btn-delete-selected');
+        const selectedCountEl = document.getElementById('selected-count');
+        const selectAllCheckbox = document.getElementById('select-all');
+
+        if (selectedCountEl) selectedCountEl.innerText = checkedCount;
+
+        if (checkedCount > 0) {
+            btnDeleteSelected.style.display = 'inline-flex';
+        } else {
+            btnDeleteSelected.style.display = 'none';
+        }
+
+        if (selectAllCheckbox) {
+            selectAllCheckbox.checked = (checkedCount === checkboxes.length && checkboxes.length > 0);
+        }
+    }
+
+    // Delete selected problem caches
+    async function deleteSelected() {
+        const checkboxes = document.querySelectorAll('.problem-checkbox:checked');
+        const ids = Array.from(checkboxes).map(cb => cb.getAttribute('data-id'));
+        if (ids.length === 0) return;
+
+        if (!confirm(`确定要清除选中的 ${ids.length} 道题目的本地翻译缓存吗？`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/problems', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ids: ids })
+            });
+
+            if (response.ok) {
+                showToast(`已成功清除选中的 ${ids.length} 道题目的本地缓存！`, 'success');
+                // Remove rows from DOM
+                checkboxes.forEach(cb => {
+                    const row = cb.closest('tr');
+                    if (row) row.remove();
+                });
+                
+                // Reset select-all checkbox
+                const selectAllCheckbox = document.getElementById('select-all');
+                if (selectAllCheckbox) selectAllCheckbox.checked = false;
+
+                // Update total count
+                const countEl = document.getElementById('cached-count');
+                if (countEl) {
+                    const currentCount = parseInt(countEl.innerText) - ids.length;
+                    countEl.innerText = currentCount;
+                    if (currentCount <= 0) {
+                        window.location.reload(); // Reload to show empty state
+                    }
+                }
+                updateSelectionStatus();
+            } else {
+                const err = await response.json();
+                showToast(err.detail || '清除本地缓存失败', 'error');
+            }
+        } catch (error) {
+            console.error(error);
+            showToast('网络错误，清除本地缓存失败', 'error');
+        }
+    }
+
+    // Delete all problem caches
+    async function deleteAllCache() {
+        const countEl = document.getElementById('cached-count');
+        const count = countEl ? countEl.innerText : '';
+        if (!confirm(`⚠️ 警告：确定要彻底清空【全部】${count} 道题目的本地已译历史缓存吗？\n清空后再次加载这些题目将重新触发翻译。`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/problems', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ all: true })
+            });
+
+            if (response.ok) {
+                showToast('已成功清空全部已翻译题目的本地缓存！', 'success');
+                window.location.reload(); // Reload to show empty state
+            } else {
+                const err = await response.json();
+                showToast(err.detail || '清空本地缓存失败', 'error');
+            }
+        } catch (error) {
+            console.error(error);
+            showToast('网络错误，清空本地缓存失败', 'error');
+        }
+    }
+
+    // Single item delete cache
+    async function deleteCache(contestId, index, problemId) {
+        if (!confirm(`确定要清除题目 ${contestId}${index} 的本地翻译缓存吗？`)) {
             return;
         }
 
@@ -173,12 +306,9 @@
             });
             if (response.ok) {
                 showToast(`已成功清除题目 ${contestId}${index} 的本地缓存！`, 'success');
-                // Remove row from DOM
                 const row = document.getElementById(`row-${contestId}-${index}`);
-                if (row) {
-                    row.remove();
-                }
-                // Update count
+                if (row) row.remove();
+                
                 const countEl = document.getElementById('cached-count');
                 if (countEl) {
                     const currentCount = parseInt(countEl.innerText) - 1;
@@ -187,6 +317,7 @@
                         window.location.reload(); // Reload to show empty state
                     }
                 }
+                updateSelectionStatus();
             } else {
                 const err = await response.json();
                 showToast(err.detail || '清除本地缓存失败', 'error');

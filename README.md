@@ -71,16 +71,19 @@ CF/
 │   │   └── app.js            # 原生 JavaScript 核心交互逻辑
 │   └── mathjax/              # 离线 MathJax 3 静态渲染 JS 库与图标
 │
+├── core/                     # 核心逻辑模块包 (子文件夹)
+│   ├── __init__.py           # 包初始化标识
+│   ├── database.py           # 数据库 ORM (SQLite 表结构与自动迁移)
+│   ├── scraper.py            # Codeforces HTML 题面解析及 LaTeX 捕获保护
+│   ├── translator.py         # LLM 容灾链智能翻译引擎
+│   ├── paths.py              # 本地持久化路径解析工具
+│   ├── cf_sync.py            # Codeforces API 数据同步与做题状态后台同步
+│   ├── pages.py              # Jinja2 渲染的页面路由 Blueprint
+│   └── api.py                # REST API JSON 接口路由 Blueprint
+│
 ├── .gitignore                # Git 忽略清单 (防止敏感数据泄露)
-├── database.py               # 数据库 ORM (SQLite 表结构与自动迁移)
-├── scraper.py                # Codeforces HTML 题面解析及 LaTeX 捕获保护
-├── translator.py             # LLM 容灾链智能翻译引擎
-├── paths.py                  # 本地持久化路径解析工具
-├── cf_sync.py                # Codeforces API 数据同步与做题状态后台同步
-├── pages.py                  # Jinja2 渲染的页面路由 Blueprint
-├── api.py                    # REST API JSON 接口路由 Blueprint
 ├── requirements.txt          # Python 依赖清单
-├── main.py                   # Flask 应用服务入口与主配置
+├── main.py                   # Flask 应用启动入口
 └── README.md                 # 软件工程系统架构与运维手册
 ```
 
