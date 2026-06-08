@@ -107,7 +107,7 @@
                 <div id="node-card-{{ node.id }}" style="border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; background-color: {% if node.is_active %}var(--bg-card){% else %}var(--bg-hover){% endif %}; display: flex; flex-direction: column; gap: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div style="display: flex; align-items: center; gap: 12px;">
-                            <button onclick="toggleActive({{ node|tojson }})" style="background: none; border: none; cursor: pointer; color: {% if node.is_active %}var(--primary){% else %}var(--text-muted){% endif %};">
+                            <button onclick='toggleActive({{ node|tojson }})' style="background: none; border: none; cursor: pointer; color: {% if node.is_active %}var(--primary){% else %}var(--text-muted){% endif %};">
                                 <i data-lucide="{% if node.is_active %}toggle-right{% else %}toggle-left{% endif %}" style="width: 32px; height: 32px;"></i>
                             </button>
                             <div>
@@ -126,11 +126,11 @@
                         </div>
 
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-secondary" id="test-btn-{{ node.id }}" onclick="testNode({{ node|tojson }})" style="padding: 8px 12px;">
+                            <button class="btn-secondary" id="test-btn-{{ node.id }}" onclick='testNode({{ node|tojson }})' style="padding: 8px 12px;">
                                 <i data-lucide="play" style="width: 14px; height: 14px;"></i>
                                 测试
                             </button>
-                            <button class="btn-secondary" onclick="openEditForm({{ node|tojson }})" style="padding: 8px 12px;">
+                            <button class="btn-secondary" onclick='openEditForm({{ node|tojson }})' style="padding: 8px 12px;">
                                 <i data-lucide="edit-2" style="width: 14px; height: 14px;"></i>
                                 修改
                             </button>
