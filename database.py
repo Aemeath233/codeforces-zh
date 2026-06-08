@@ -152,3 +152,10 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def get_flask_db():
+    from flask import g
+    if 'db' not in g:
+        g.db = SessionLocal()
+    return g.db
+
