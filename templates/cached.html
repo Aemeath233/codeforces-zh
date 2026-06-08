@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
 
-{% block title %}📚 本地已译题目 - CF 中文镜像站{% endblock %}
+{% block title %}本地已译题目 - CF 中文镜像站{% endblock %}
 
 {% block content %}
 <div style="display: flex; flex-direction: column; gap: 24px;">
     <!-- Page Header -->
     <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;">
         <div>
-            <h1 class="page-title">📚 本地已译题目</h1>
+            <h1 class="page-title">本地已译题目</h1>
             <p class="page-subtitle">
                 您翻译并缓存的全部双语题面都在这里（当前共 <span id="cached-count">{{ problems|length }}</span> 道），支持离线极速秒开阅读。
             </p>
@@ -31,7 +31,7 @@
     {% if problems|length == 0 %}
     <!-- Empty State -->
     <div id="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 32px; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; boxShadow: var(--shadow-premium); text-align: center; gap: 16px;">
-        <span style="font-size: 48px;">📪</span>
+        <i data-lucide="inbox" style="width: 48px; height: 48px; color: var(--text-muted); stroke-width: 1.5;"></i>
         <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary);">暂无本地已译题目历史</h3>
         <p style="color: var(--text-secondary); font-size: 14.5px; max-width: 500px; line-height: 1.6; margin: 0 auto 8px auto;">
             当您在“仪表盘”或“官方题库列表”中选择并翻译一道新题目后，系统便会自动将其中文翻译和原版题面**完整离线记录**到本地的数据库中，并同步显示在此处！
@@ -82,9 +82,9 @@
                     <td style="padding: 18px 24px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             {% if p.solved_status == 'OK' %}
-                            <span title="已通过 (Accepted)" style="display: inline-flex; font-size: 14px; cursor: default;">✅</span>
+                            <i data-lucide="check-circle-2" style="width: 14px; height: 14px; color: var(--success); flex-shrink: 0;" title="已通过 (Accepted)"></i>
                             {% elif p.solved_status == 'FAILED' %}
-                            <span title="尝试过未通过 (Attempted)" style="display: inline-flex; font-size: 14px; cursor: default;">❌</span>
+                            <i data-lucide="x-circle" style="width: 14px; height: 14px; color: var(--danger); flex-shrink: 0;" title="尝试过未通过 (Attempted)"></i>
                             {% endif %}
                             <span style="display: inline-block; padding: 4px 10px; background-color: var(--primary-light); color: var(--primary); font-weight: 800; font-size: 13px; border-radius: 6px; font-family: var(--font-mono);">
                                 {{ p.contest_id }}{{ p.index }}

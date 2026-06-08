@@ -41,7 +41,7 @@ def get_mock_translation(problem_data: dict, error_logs: list = None) -> dict:
     if error_logs:
         error_html = (
             "<div style='background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 6px; margin-bottom: 12px; font-size: 13.5px; border: 1px solid #fecaca;'>"
-            "<b>❌ [多API回退告警] 您的所有配置大模型节点调用均已失败：</b>"
+            "<b>[多API回退告警] 您的所有配置大模型节点调用均已失败：</b>"
             "<ul style='margin-left: 20px; margin-top: 6px;'>"
             + "".join([f"<li><b>{name}</b>: {err}</li>" for name, err in error_logs]) +
             "</ul>"
@@ -49,7 +49,7 @@ def get_mock_translation(problem_data: dict, error_logs: list = None) -> dict:
             "</div>"
         )
     else:
-        error_html = "<div style='background: #fef08a; color: #854d0e; padding: 10px; border-radius: 6px; margin-bottom: 12px; font-size: 14px; border: 1px solid #fef08a;'>⚠️ [系统提示] 检测到您尚未配置大模型 API Key。当前正处于<b>模拟翻译模式</b>。请前往“管理后台”添加您的大模型密钥以激活真正的 AI 智能翻译。</div>"
+        error_html = "<div style='background: #fef08a; color: #854d0e; padding: 10px; border-radius: 6px; margin-bottom: 12px; font-size: 14px; border: 1px solid #fef08a;'>[系统提示] 检测到您尚未配置大模型 API Key。当前正处于<b>模拟翻译模式</b>。请前往“管理后台”添加您的大模型密钥以激活真正的 AI 智能翻译。</div>"
     
     return {
         "is_mock": True,
@@ -168,7 +168,7 @@ def translate_problem(problem_data: dict, db: Session) -> dict:
             
             success_badge = (
                 f"<div style='background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; padding: 6px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px;'>"
-                f"<span>🚀</span> [智能加速翻译 v2] 本题已启用全新单次 JSON 上下文联合翻译优化，耗时 <b>{elapsed_time:.2f} 秒</b>，由大模型 <b>{config.name} ({config.model})</b> 翻译并进行格式保护"
+                f"[智能加速翻译 v2] 本题已启用全新单次 JSON 上下文联合翻译优化，耗时 <b>{elapsed_time:.2f} 秒</b>，由大模型 <b>{config.name} ({config.model})</b> 翻译并进行格式保护"
                 f"</div>"
             )
             

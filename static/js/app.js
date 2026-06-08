@@ -106,11 +106,11 @@ async function pollAcSyncStatus() {
 
 function showSyncOutcomeToast(data) {
     if (data.last_error) {
-        showToast(`❌ 做题状态同步失败: ${data.last_error}`, 'error');
+        showToast(`做题状态同步失败: ${data.last_error}`, 'error');
     } else if (data.record_count === 0) {
         showToast('Codeforces 做题状态同步完成，暂无记录。', 'success');
     } else {
-        showToast(`🎉 做题状态同步完成！(AC ${data.accepted_count || 0} 题 / 尝试未过 ${data.failed_count || 0} 题 / 共 ${data.record_count || 0} 条记录)`, 'success');
+        showToast(`做题状态同步完成！(AC ${data.accepted_count || 0} 题 / 尝试未过 ${data.failed_count || 0} 题 / 共 ${data.record_count || 0} 条记录)`, 'success');
     }
 }
 
@@ -171,7 +171,6 @@ function renderAcStatusBar() {
         bar.innerHTML = `
             <span style="display: inline-block; width: 6px; height: 6px; background-color: #ef4444; border-radius: 50%;"></span>
             <span>同步失败: ${escapeHtml(acSyncStatus.handle)}</span>
-            <span style="font-size: 10px; opacity: 0.8;">🔄</span>
         `;
     } else {
         bar.style.backgroundColor = 'var(--success-bg, rgba(16, 185, 129, 0.08))';
@@ -185,7 +184,6 @@ function renderAcStatusBar() {
         bar.innerHTML = `
             <span style="display: inline-block; width: 6px; height: 6px; background-color: var(--success, #10b981); border-radius: 50%;"></span>
             <span>做题状态已同步: ${escapeHtml(acSyncStatus.handle)} (AC ${acSyncStatus.accepted_count || 0} / 尝试未过 ${acSyncStatus.failed_count || 0} / 共 ${acSyncStatus.record_count || 0} 条记录)</span>
-            <span style="font-size: 10px; opacity: 0.8;">🔄</span>
         `;
     }
 }
@@ -304,7 +302,7 @@ async function triggerBatchTranslation(selectedProblemsList) {
                 'error'
             );
         } else {
-            showToast(`🎉 批量预翻译任务已全部圆满完成，已选题目已被本地离线缓存。`, 'success');
+            showToast(`批量预翻译任务已全部圆满完成，已选题目已被本地离线缓存。`, 'success');
         }
         
         // Reload list to update local badges
@@ -338,7 +336,7 @@ function updateBatchStatusUI() {
     const countdown = document.getElementById('batch-countdown-text');
     if (batchQueue.timerCountdown > 0) {
         countdown.style.display = 'inline-block';
-        countdown.innerText = `⏱️ ${batchQueue.timerCountdown}s`;
+        countdown.innerText = `${batchQueue.timerCountdown}s`;
     } else {
         countdown.style.display = 'none';
     }

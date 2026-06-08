@@ -188,7 +188,7 @@
             {% if problem.samples %}
             <div>
                 <h2 class="panel-title" style="font-size: 18px; border-bottom: none; padding-bottom: 0; margin-bottom: 16px;">
-                    📊 评测样例数据 (Examples)
+                    评测样例数据 (Examples)
                 </h2>
                 <div class="samples-container">
                     {% for sample in problem.samples %}
@@ -230,19 +230,17 @@
             {% if has_note %}
             <div id="note-bilingual-section" style="margin-top: 32px; border-top: 1px solid var(--border-color); padding-top: 24px;">
                 <h2 class="panel-title" style="font-size: 18px; border: none; padding: 0; margin-bottom: 16px;">
-                    💡 样例说明 / 提示 (Note)
+                    样例说明 / 提示 (Note)
                 </h2>
                 <div class="problem-reader-split" id="note-columns-split">
                     <!-- Chinese Note -->
                     <div class="problem-html" id="chinese-note-col">
-                        <div class="column-header-tab" style="margin-bottom: 12px;">说明 (译)</div>
                         <div class="tex2jax_process">
                             {{ problem.translated_note_html|safe or problem.note_html|safe }}
                         </div>
                     </div>
                     <!-- English Note -->
                     <div class="problem-html" id="english-note-col">
-                        <div class="column-header-tab en" style="margin-bottom: 12px;">Original Note</div>
                         <div class="tex2jax_process">
                             {{ problem.note_html|safe }}
                         </div>

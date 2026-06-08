@@ -278,7 +278,7 @@
 
     function handleContestClick(id, phase, name) {
         if (phase === 'BEFORE') {
-            showToast('💡 提示：该比赛尚未开始，Codeforces 官方尚未公开题目列表，请在比赛开始后再来查看哦！', 'error');
+            showToast('提示：该比赛尚未开始，Codeforces 官方尚未公开题目列表，请在比赛开始后再来查看哦！', 'error');
             return;
         }
         
@@ -324,9 +324,9 @@
 
                     let statusBadge = '';
                     if (p.solved_status === 'OK') {
-                        statusBadge = '<span title="已通过 (Accepted)" style="font-size: 14px; margin-right: 4px; display: inline-flex; align-items: center;">✅</span>';
+                        statusBadge = '<i data-lucide="check-circle-2" style="width: 14px; height: 14px; color: var(--success); margin-right: 6px; flex-shrink: 0;" title="已通过 (Accepted)"></i>';
                     } else if (p.solved_status === 'FAILED') {
-                        statusBadge = '<span title="尝试过未通过 (Attempted)" style="font-size: 14px; margin-right: 4px; display: inline-flex; align-items: center;">❌</span>';
+                        statusBadge = '<i data-lucide="x-circle" style="width: 14px; height: 14px; color: var(--danger); margin-right: 6px; flex-shrink: 0;" title="尝试过未通过 (Attempted)"></i>';
                     }
 
                     const ratingBadge = p.rating 
@@ -360,6 +360,7 @@
                 });
                 html += '</div>';
                 body.innerHTML = html;
+                lucide.createIcons();
             } else {
                 showToast('获取比赛题目列表失败，请稍后重试', 'error');
                 closeContestModal();
