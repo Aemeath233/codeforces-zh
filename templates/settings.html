@@ -1,181 +1,272 @@
 {% extends 'base.html' %}
 
-{% block title %}管理后台 (设置) - CF 中文镜像站{% endblock %}
-
-{% block content %}
-<div style="display: flex; flex-direction: column; gap: 32px;">
+{% block title %}管理后台 (设置) - CF 中文镜像站{% endblock %}<div style="display: flex; flex-direction: column; gap: 24px;">
 
     <!-- Page Header -->
-    <div class="page-header">
+    <div class="page-header" style="margin-bottom: 8px;">
         <h1 class="page-title">管理后台 (控制与配置)</h1>
-        <p class="page-subtitle">配置您的多个大模型 API 以及 Codeforces 登录凭证，开启无缝翻译与做题状态/AC状态自动同步体验。</p>
+        <p class="page-subtitle">配置您的大模型 API、Codeforces 凭证并查看运行状态，开启极速离线做题体验。</p>
     </div>
 
-    <!-- Codeforces Account Form -->
-    <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; boxShadow: var(--shadow-premium);">
-        <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
-            <i data-lucide="user" style="color: var(--primary); width: 20px; height: 20px;"></i>
-            Codeforces 账户导入与登录凭证设置 (用于同步做题/AC状态)
-        </h2>
+    <!-- Settings Tabs Navigation -->
+    <div class="settings-tabs-container">
+        <div class="settings-tab active" id="tab-btn-status" onclick="switchSettingsTab('status')">
+            <i data-lucide="activity"></i>
+            <span>运行状态</span>
+        </div>
+        <div class="settings-tab" id="tab-btn-account" onclick="switchSettingsTab('account')">
+            <i data-lucide="user"></i>
+            <span>账户与提交</span>
+        </div>
+        <div class="settings-tab" id="tab-btn-api" onclick="switchSettingsTab('api')">
+            <i data-lucide="cpu"></i>
+            <span>API 节点</span>
+        </div>
+        <div class="settings-tab" id="tab-btn-prompt" onclick="switchSettingsTab('prompt')">
+            <i data-lucide="code-2"></i>
+            <span>系统提示词</span>
+        </div>
+    </div>
 
-        <form id="cf-auth-form" onsubmit="saveUserAuth(event)" style="display: flex; flex-direction: column; gap: 20px;">
-            <div style="display: flex; flex-direction: column; gap: 16px;">
-                <div class="form-group" style="max-width: 400px;">
-                    <label class="form-label" for="cfHandle">
-                        CF 用户名 (Handle) *
-                    </label>
-                    <input
-                        id="cfHandle"
-                        type="text"
-                        class="form-input"
-                        placeholder="例如: tourist"
-                        value="{{ user_config.cf_handle or '' }}"
-                        required
-                    />
-                    <span style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: inline-block;">
-                        仅需填写用户名即可自动同步并标记已通过的题目，无需输入密码或 Cookie。
-                    </span>
-                </div>
-
-                <div class="form-group" style="max-width: 400px;">
-                    <label class="form-label" for="cfCompiler">
-                        默认提交编译器 (Compiler)
-                    </label>
-                    <select
-                        id="cfCompiler"
-                        class="form-input"
-                        style="font-weight: 600; cursor: pointer;"
-                    >
-                        <option value="91">GNU G++23 14.2 (C++23)</option>
-                        <option value="89">GNU G++20 13.2 (C++20)</option>
-                        <option value="54">GNU G++17 7.3.0 (C++17)</option>
-                        <option value="31">Python 3.8.10</option>
-                        <option value="70">PyPy 3.10 (7.3.15)</option>
-                        <option value="87">Java 21 64bit</option>
-                        <option value="60">Java 17 64bit</option>
-                        <option value="75">Rust 1.75.0</option>
-                        <option value="55">Node.js 20.11.1</option>
-                    </select>
-                    <span style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: inline-block;">
-                        用于在题目详情页中点击“前往提交”时预选并自动带入官网页面。
-                    </span>
-                </div>
-
-                <!-- Advanced Section Toggle -->
-                <div style="margin-top: 4px;">
-                    <button
-                        type="button"
-                        onclick="toggleAdvanced()"
-                        class="btn-secondary"
-                        style="padding: 6px 12px; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 4px;"
-                    >
-                        <span id="advanced-toggle-text">显示高级设置 (Cookie 保留用途)</span>
-                    </button>
-                </div>
-
-                <div id="advanced-cookie-section"
-                    style="display: none; flex-direction: column; gap: 16px; padding: 20px; background-color: var(--bg-hover); border-radius: 12px; border: 1px solid var(--border-color); margin-top: 4px;"
-                >
-                    <div class="form-group" style="margin: 0;">
-                        <label class="form-label" for="cfCookies">
-                            浏览器登录 Cookies (高级保留用途 - 默认留空)
-                        </label>
-                        <input
-                            id="cfCookies"
-                            type="password"
-                            class="form-input"
-                            placeholder="{% if user_config.cf_cookies_configured %}已导入 Cookies: **** (粘贴新值可进行覆盖){% else %}通常留空即可。如需保留以作未来接口代理提交等高级用途，请粘贴您的 Cookie{% endif %}"
-                            value="{% if user_config.cf_cookies_configured %}****{% endif %}"
-                        />
-                    </div>
-                    <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
-                        💡 <b>两步教您如何快速获取 Cookies 字符串：</b>
-                        <ol style="margin-left: 20px; margin-top: 6px;">
-                            <li>用 Chrome/Edge 浏览器打开并登录 <a href="https://codeforces.com" target="_blank" rel="noreferrer" style="color: var(--primary); font-weight: 600;">codeforces.com</a>。</li>
-                            <li>按键盘 <b>F12</b> 键打开开发者工具 &rarr; 切换到顶部的 <b>“控制台 (Console)”</b> &rarr; 输入 <code>document.cookie</code> 回车 &rarr; **复制返回的整段带引号的字符串文本**，直接贴到上面的输入框即可！</li>
-                        </ol>
-                        {% if user_config.cf_cookies_configured %}
-                        <div id="cookie-status-badge" style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--success); margin-top: 8px; font-weight: 600;">
-                            <i data-lucide="shield-check" style="width: 16px; height: 16px;"></i> 本地 Cookie 凭证已导入（目前代理提交默认关闭，Cookie 仅作为高级用途保留）。
-                        </div>
-                        {% endif %}
-                    </div>
+    <!-- Tab Pane 1: System Status -->
+    <div id="pane-status" class="settings-content-pane active">
+        <!-- Codeforces Sync Details Card -->
+        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium); display: flex; flex-direction: column; gap: 20px;">
+            <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="activity" style="color: var(--primary); width: 20px; height: 20px;"></i>
+                做题状态同步指示
+            </h2>
+            <div id="status-sync-details-card" style="border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; background-color: var(--bg-hover); display: flex; flex-direction: column; gap: 16px;">
+                <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-secondary);">
+                    <div class="spinner" style="width: 16px; height: 16px; border-width: 2px; margin: 0;"></div>
+                    <span>正在获取状态同步细节...</span>
                 </div>
             </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+                <button onclick="triggerAcStatusSync()" id="status-sync-now-btn" class="search-button" style="display: flex; align-items: center; gap: 6px; padding: 10px 20px;">
+                    <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
+                    立即刷新同步
+                </button>
+            </div>
+        </div>
 
-            <button type="submit" id="save-user-btn" class="search-button" style="width: fit-content; padding: 10px 24px;">
-                保存登录凭证
+        <!-- Local Cache Status Card -->
+        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium); display: flex; flex-direction: column; gap: 20px;">
+            <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="database" style="color: var(--primary); width: 20px; height: 20px;"></i>
+                数据存储与离线缓存状态
+            </h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div style="border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 8px; background-color: var(--bg-hover);">
+                    <span style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">官方题库同步总数</span>
+                    <strong style="font-size: 24px; color: var(--text-primary);">{{ total_library }} 题</strong>
+                    <span style="font-size: 12px; color: var(--text-muted);">本地缓存的 Codeforces 官方全量题目目录。</span>
+                </div>
+                <div style="border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 8px; background-color: var(--bg-hover);">
+                    <span style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">已翻译离线缓存题目</span>
+                    <strong style="font-size: 24px; color: var(--primary);">{{ total_cached }} 题</strong>
+                    <span style="font-size: 12px; color: var(--text-muted);">已完成大模型智能翻译并存储在本地的高速离线数据。</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Pane 2: Account and Compiler -->
+    <div id="pane-account" class="settings-content-pane">
+        <!-- Codeforces Account Form -->
+        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; boxShadow: var(--shadow-premium);">
+            <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="user" style="color: var(--primary); width: 20px; height: 20px;"></i>
+                Codeforces 账户导入与登录凭证设置 (用于同步做题/AC状态)
+            </h2>
+
+            <form id="cf-auth-form" onsubmit="saveUserAuth(event)" style="display: flex; flex-direction: column; gap: 20px;">
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <div class="form-group" style="max-width: 400px;">
+                        <label class="form-label" for="cfHandle">
+                            CF 用户名 (Handle) *
+                        </label>
+                        <input
+                            id="cfHandle"
+                            type="text"
+                            class="form-input"
+                            placeholder="例如: tourist"
+                            value="{{ user_config.cf_handle or '' }}"
+                            required
+                        />
+                        <span style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: inline-block;">
+                            仅需填写用户名即可自动同步并标记已通过的题目，无需输入密码或 Cookie。
+                        </span>
+                    </div>
+
+                    <div class="form-group" style="max-width: 400px;">
+                        <label class="form-label" for="cfCompiler">
+                            默认提交编译器 (Compiler)
+                        </label>
+                        <select
+                            id="cfCompiler"
+                            class="form-input"
+                            style="font-weight: 600; cursor: pointer;"
+                        >
+                            <option value="91">GNU G++23 14.2 (C++23)</option>
+                            <option value="89">GNU G++20 13.2 (C++20)</option>
+                            <option value="54">GNU G++17 7.3.0 (C++17)</option>
+                            <option value="31">Python 3.8.10</option>
+                            <option value="70">PyPy 3.10 (7.3.15)</option>
+                            <option value="87">Java 21 64bit</option>
+                            <option value="60">Java 17 64bit</option>
+                            <option value="75">Rust 1.75.0</option>
+                            <option value="55">Node.js 20.11.1</option>
+                        </select>
+                        <span style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: inline-block;">
+                            用于在题目详情页中点击“前往提交”时预选并自动带入官网页面。
+                        </span>
+                    </div>
+
+                    <!-- Advanced Section Toggle -->
+                    <div style="margin-top: 4px;">
+                        <button
+                            type="button"
+                            onclick="toggleAdvanced()"
+                            class="btn-secondary"
+                            style="padding: 6px 12px; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 4px;"
+                        >
+                            <span id="advanced-toggle-text">显示高级设置 (Cookie 保留用途)</span>
+                        </button>
+                    </div>
+
+                    <div id="advanced-cookie-section"
+                        style="display: none; flex-direction: column; gap: 16px; padding: 20px; background-color: var(--bg-hover); border-radius: 12px; border: 1px solid var(--border-color); margin-top: 4px;"
+                    >
+                        <div class="form-group" style="margin: 0;">
+                            <label class="form-label" for="cfCookies">
+                                浏览器登录 Cookies (高级保留用途 - 默认留空)
+                            </label>
+                            <input
+                                id="cfCookies"
+                                type="password"
+                                class="form-input"
+                                placeholder="{% if user_config.cf_cookies_configured %}已导入 Cookies: **** (粘贴新值可进行覆盖){% else %}通常留空即可。如需保留以作未来接口代理提交等高级用途，请粘贴您的 Cookie{% endif %}"
+                                value="{% if user_config.cf_cookies_configured %}****{% endif %}"
+                            />
+                        </div>
+                        <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+                            💡 <b>两步教您如何快速获取 Cookies 字符串：</b>
+                            <ol style="margin-left: 20px; margin-top: 6px;">
+                                <li>用 Chrome/Edge 浏览器打开并登录 <a href="https://codeforces.com" target="_blank" rel="noreferrer" style="color: var(--primary); font-weight: 600;">codeforces.com</a>。</li>
+                                <li>按键盘 <b>F12</b> 键打开开发者工具 &rarr; 切换到顶部的 <b>“控制台 (Console)”</b> &rarr; 输入 <code>document.cookie</code> 回车 &rarr; **复制返回的整段带引号的字符串文本**，直接贴到上面的输入框即可！</li>
+                            </ol>
+                            {% if user_config.cf_cookies_configured %}
+                            <div id="cookie-status-badge" style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--success); margin-top: 8px; font-weight: 600;">
+                                <i data-lucide="shield-check" style="width: 16px; height: 16px;"></i> 本地 Cookie 凭证已导入（目前代理提交默认关闭，Cookie 仅作为高级用途保留）。
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" id="save-user-btn" class="search-button" style="width: fit-content; padding: 10px 24px;">
+                    保存登录凭证
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tab Pane 3: API Configurations -->
+    <div id="pane-api" class="settings-content-pane">
+        <!-- LLM Node list and active controls -->
+        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; boxShadow: var(--shadow-premium);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0;">
+                    🔗 智能翻译大模型节点链 (API Fallback Chain)
+                </h2>
+                <button class="search-button" onclick="openAddForm()" style="display: flex; align-items: center; gap: 6px; padding: 10px 18px;">
+                    <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
+                    添加 API 节点
+                </button>
+            </div>
+
+            <div style="display: flex; flexDirection: column; gap: 16px;">
+                {% if llm_configs|length == 0 %}
+                <div style="padding: 40px; text-align: center; color: var(--text-muted); border: 1px dashed var(--border-color); border-radius: 10px;">
+                    当前暂未配置任何大模型 API 节点。请点击右上角按钮添加。
+                </div>
+                {% else %}
+                    {% for node in llm_configs %}
+                    <div id="node-card-{{ node.id }}" style="border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; background-color: {% if node.is_active %}var(--bg-card){% else %}var(--bg-hover){% endif %}; display: flex; flex-direction: column; gap: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <button onclick='toggleActive({{ node|tojson }})' style="background: none; border: none; cursor: pointer; color: {% if node.is_active %}var(--primary){% else %}var(--text-muted){% endif %};">
+                                    <i data-lucide="{% if node.is_active %}toggle-right{% else %}toggle-left{% endif %}" style="width: 32px; height: 32px;"></i>
+                                </button>
+                                <div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-weight: 700; font-size: 16px; color: {% if node.is_active %}var(--text-primary){% else %}var(--text-secondary){% endif %};">
+                                            {{ node.name }}
+                                        </span>
+                                        <span style="font-size: 11px; font-weight: 700; color: white; background-color: var(--primary); padding: 2px 8px; border-radius: 4px;">
+                                            优先度: {{ node.priority }}
+                                        </span>
+                                    </div>
+                                    <span style="font-size: 12px; color: var(--text-secondary);">
+                                        模型: <code>{{ node.model }}</code> | 网关: <code>{{ node.base_url }}</code>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn-secondary" id="test-btn-{{ node.id }}" onclick='testNode({{ node|tojson }})' style="padding: 8px 12px;">
+                                    <i data-lucide="play" style="width: 14px; height: 14px;"></i>
+                                    测试
+                                </button>
+                                <button class="btn-secondary" onclick='openEditForm({{ node|tojson }})' style="padding: 8px 12px;">
+                                    <i data-lucide="edit-2" style="width: 14px; height: 14px;"></i>
+                                    修改
+                                </button>
+                                <button class="btn-secondary" onclick="deleteNode({{ node.id }})" style="padding: 8px 12px; color: var(--danger); border-color: var(--danger-bg);">
+                                    <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                                    删除
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Connection Test Response Block (JS populated) -->
+                        <div id="test-result-{{ node.id }}" style="display: none; padding: 12px 16px; border-radius: 6px; font-size: 13px; align-items: center; gap: 10px;">
+                            <!-- Content inside dynamically rendered -->
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Pane 4: System Prompt -->
+    <div id="pane-prompt" class="settings-content-pane">
+        <!-- Global prompt tuner -->
+        <form onsubmit="savePrompt(event)" class="settings-form">
+            <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0;">
+                ⚙️ 算法题翻译系统提示词 (System Prompt)
+            </h2>
+            <div class="form-group">
+                <textarea
+                    id="systemPrompt"
+                    class="form-input textarea"
+                    style="min-height: 180px;"
+                    required
+                >{{ system_prompt }}</textarea>
+                <span style="font-size: 12px; color: var(--text-secondary);">
+                    此系统提示词规定了所有 API 节点的大模型在翻译题目时的指令，强制其**绝对保留 LaTeX 数学公式和 HTML 标签**，确保排版完美。
+                </span>
+            </div>
+            <button type="submit" id="save-prompt-btn" class="search-button" style="display: flex; align-items: center; gap: 8px; padding: 10px 18px; width: fit-content;">
+                <i data-lucide="save" style="width: 16px; height: 16px;"></i>
+                保存系统提示词
             </button>
         </form>
     </div>
 
-    <!-- LLM Node list and active controls -->
-    <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; boxShadow: var(--shadow-premium);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-            <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0;">
-                🔗 智能翻译大模型节点链 (API Fallback Chain)
-            </h2>
-            <button class="search-button" onclick="openAddForm()" style="display: flex; align-items: center; gap: 6px; padding: 10px 18px;">
-                <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
-                添加 API 节点
-            </button>
-        </div>
-
-        <div style="display: flex; flexDirection: column; gap: 16px;">
-            {% if llm_configs|length == 0 %}
-            <div style="padding: 40px; text-align: center; color: var(--text-muted); border: 1px dashed var(--border-color); border-radius: 10px;">
-                当前暂未配置任何大模型 API 节点。请点击右上角按钮添加。
-            </div>
-            {% else %}
-                {% for node in llm_configs %}
-                <div id="node-card-{{ node.id }}" style="border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; background-color: {% if node.is_active %}var(--bg-card){% else %}var(--bg-hover){% endif %}; display: flex; flex-direction: column; gap: 12px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <button onclick='toggleActive({{ node|tojson }})' style="background: none; border: none; cursor: pointer; color: {% if node.is_active %}var(--primary){% else %}var(--text-muted){% endif %};">
-                                <i data-lucide="{% if node.is_active %}toggle-right{% else %}toggle-left{% endif %}" style="width: 32px; height: 32px;"></i>
-                            </button>
-                            <div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-weight: 700; font-size: 16px; color: {% if node.is_active %}var(--text-primary){% else %}var(--text-secondary){% endif %};">
-                                        {{ node.name }}
-                                    </span>
-                                    <span style="font-size: 11px; font-weight: 700; color: white; background-color: var(--primary); padding: 2px 8px; border-radius: 4px;">
-                                        优先度: {{ node.priority }}
-                                    </span>
-                                </div>
-                                <span style="font-size: 12px; color: var(--text-secondary);">
-                                    模型: <code>{{ node.model }}</code> | 网关: <code>{{ node.base_url }}</code>
-                                </span>
-                            </div>
-                        </div>
-
-                        <div style="display: flex; gap: 8px;">
-                            <button class="btn-secondary" id="test-btn-{{ node.id }}" onclick='testNode({{ node|tojson }})' style="padding: 8px 12px;">
-                                <i data-lucide="play" style="width: 14px; height: 14px;"></i>
-                                测试
-                            </button>
-                            <button class="btn-secondary" onclick='openEditForm({{ node|tojson }})' style="padding: 8px 12px;">
-                                <i data-lucide="edit-2" style="width: 14px; height: 14px;"></i>
-                                修改
-                            </button>
-                            <button class="btn-secondary" onclick="deleteNode({{ node.id }})" style="padding: 8px 12px; color: var(--danger); border-color: var(--danger-bg);">
-                                <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
-                                删除
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Connection Test Response Block (JS populated) -->
-                    <div id="test-result-{{ node.id }}" style="display: none; padding: 12px 16px; border-radius: 6px; font-size: 13px; align-items: center; gap: 10px;">
-                        <!-- Content inside dynamically rendered -->
-                    </div>
-                </div>
-                {% endfor %}
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Modal Form (Hidden by default) -->
+    <!-- Modal Form (Hidden by default, kept outside tab panes) -->
     <div id="node-modal-overlay" class="modal-overlay" style="display: none; z-index: 1000;">
         <form id="node-form" onsubmit="saveNode(event)" class="settings-form" style="border: 2px solid var(--primary); max-width: 600px; width: 90%; background: var(--bg-card); position: relative;">
             <h3 class="panel-title" id="modal-title" style="border: none; padding: 0;">
@@ -253,36 +344,149 @@
             </div>
         </form>
     </div>
-
-    <!-- Global prompt tuner -->
-    <form onsubmit="savePrompt(event)" class="settings-form">
-        <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0;">
-            ⚙️ 算法题翻译系统提示词 (System Prompt)
-        </h2>
-        <div class="form-group">
-            <textarea
-                id="systemPrompt"
-                class="form-input textarea"
-                style="min-height: 180px;"
-                required
-            >{{ system_prompt }}</textarea>
-            <span style="font-size: 12px; color: var(--text-secondary);">
-                此系统提示词规定了所有 API 节点的大模型在翻译题目时的指令，强制其**绝对保留 LaTeX 数学公式和 HTML 标签**，确保排版完美。
-            </span>
-        </div>
-        <button type="submit" id="save-prompt-btn" class="search-button" style="display: flex; align-items: center; gap: 8px; padding: 10px 18px; width: fit-content;">
-            <i data-lucide="save" style="width: 16px; height: 16px;"></i>
-            保存系统提示词
-        </button>
-    </form>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+    // Tab switching logic for settings page
+    function switchSettingsTab(tabName) {
+        document.querySelectorAll('.settings-content-pane').forEach(pane => {
+            pane.classList.remove('active');
+        });
+        document.querySelectorAll('.settings-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+
+        const pane = document.getElementById(`pane-${tabName}`);
+        const tabBtn = document.getElementById(`tab-btn-${tabName}`);
+        
+        if (pane && tabBtn) {
+            pane.classList.add('active');
+            tabBtn.classList.add('active');
+            localStorage.setItem('settings_active_tab', tabName);
+        }
+
+        // Fetch running status details when status tab is active
+        if (tabName === 'status') {
+            loadStatusTabDetails();
+        }
+    }
+
+    // Fetch and render settings status details
+    async function loadStatusTabDetails() {
+        const card = document.getElementById('status-sync-details-card');
+        if (!card) return;
+
+        try {
+            const response = await fetch('/api/user/status-sync');
+            if (response.ok) {
+                const data = await response.json();
+                
+                if (data.handle) {
+                    let statusHtml = '';
+                    if (data.syncing) {
+                        statusHtml = `
+                            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--warning);">
+                                <div class="spinner" style="width: 14px; height: 14px; border-width: 2px; border-top-color: var(--warning); animation-duration: 0.8s; margin: 0;"></div>
+                                <span>后台同步任务正在进行中 (Syncing...)</span>
+                            </div>
+                        `;
+                    } else if (data.last_error) {
+                        statusHtml = `
+                            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--danger);">
+                                <span style="width: 8px; height: 8px; background-color: var(--danger); border-radius: 50%;"></span>
+                                <span>上次同步失败: ${escapeHtml(data.last_error)}</span>
+                            </div>
+                        `;
+                    } else {
+                        statusHtml = `
+                            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--success);">
+                                <span style="width: 8px; height: 8px; background-color: var(--success); border-radius: 50%;"></span>
+                                <span>同步状态健康 (Connected)</span>
+                            </div>
+                        `;
+                    }
+
+                    const syncTime = data.last_fetched > 0 ? new Date(data.last_fetched * 1000).toLocaleString() : '从无';
+
+                    card.innerHTML = `
+                        <div style="display: flex; flex-direction: column; gap: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 20px;">👤</span>
+                                    <div>
+                                        <div style="font-weight: 700; font-size: 16px; color: var(--text-primary);">${escapeHtml(data.handle)}</div>
+                                        <div style="font-size: 12px; color: var(--text-secondary);">已绑定的 Codeforces 账号</div>
+                                    </div>
+                                </div>
+                                ${statusHtml}
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; text-align: center;">
+                                <div style="background-color: var(--bg-card); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">已通过题目 (AC)</div>
+                                    <strong style="font-size: 20px; color: var(--success);">${data.accepted_count || 0} 题</strong>
+                                </div>
+                                <div style="background-color: var(--bg-card); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">尝试未通过</div>
+                                    <strong style="font-size: 20px; color: var(--warning);">${data.failed_count || 0} 题</strong>
+                                </div>
+                                <div style="background-color: var(--bg-card); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">同步总条数</div>
+                                    <strong style="font-size: 20px; color: var(--text-primary);">${data.record_count || 0} 条</strong>
+                                </div>
+                            </div>
+
+                            <div style="font-size: 12.5px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+                                <span>🕒 上次同步成功时间:</span>
+                                <strong>${syncTime}</strong>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    card.innerHTML = `
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center;">
+                            <span style="font-size: 32px;">⚠️</span>
+                            <div style="font-weight: 700; color: var(--text-primary);">您尚未绑定 Codeforces 账号</div>
+                            <p style="font-size: 13px; color: var(--text-secondary); max-width: 450px;">
+                                绑定 Codeforces 账号后，本地系统可以自动拉取您的 AC 记录并在题库中高亮标记。
+                            </p>
+                            <button onclick="switchSettingsTab('account')" class="btn-secondary" style="padding: 8px 16px; margin-top: 4px;">
+                                立即前往导入账号
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+            // Re-initialize icons inside settings panel
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+        } catch (error) {
+            console.error('Failed to load status details:', error);
+            card.innerHTML = `<div style="color: var(--danger); font-weight: 600;">⚠️ 获取状态详情失败，请检查网络。</div>`;
+        }
+    }
+
+    // Helper to escape HTML strings inside JS
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
     // Load cached compiler settings on initialization
     const cachedCompiler = localStorage.getItem('cf_compiler_id') || '89';
     document.getElementById('cfCompiler').value = cachedCompiler;
+
+    // Load active settings tab on load
+    const activeSettingsTab = localStorage.getItem('settings_active_tab') || 'status';
+    switchSettingsTab(activeSettingsTab);
 
     // Toggle advanced section
     let isAdvancedOpen = false;

@@ -1088,3 +1088,61 @@ input, button, select, textarea {
   width: 100%;
 }
 
+/* Settings Page Tabs styling */
+.settings-tabs-container {
+  display: flex;
+  gap: 8px;
+  background-color: var(--bg-hover);
+  padding: 6px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  margin-bottom: 24px;
+  width: fit-content;
+}
+
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.settings-tab:hover {
+  color: var(--text-primary);
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.settings-tab.active {
+  color: var(--primary);
+  background-color: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.settings-tab i {
+  width: 16px;
+  height: 16px;
+}
+
+.settings-content-pane {
+  display: none;
+  animation: settingsFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.settings-content-pane.active {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+@keyframes settingsFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+

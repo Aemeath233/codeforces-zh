@@ -52,6 +52,11 @@ async function checkAcStatus() {
             acSyncStatus = data;
             renderAcStatusBar();
             
+            // If on settings tab status view, update the detailed stats
+            if (typeof loadStatusTabDetails === 'function') {
+                loadStatusTabDetails();
+            }
+
             // If it's currently syncing in the background, poll every 2.5 seconds
             if (data.syncing) {
                 if (!syncPollerId) {
@@ -76,6 +81,11 @@ async function pollAcSyncStatus() {
             const data = await response.json();
             acSyncStatus = data;
             renderAcStatusBar();
+            
+            if (typeof loadStatusTabDetails === 'function') {
+                loadStatusTabDetails();
+            }
+
             if (!data.syncing) {
                 clearInterval(syncPollerId);
                 syncPollerId = null;

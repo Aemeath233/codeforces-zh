@@ -190,4 +190,16 @@ def view_settings_page():
         "cf_cookies_configured": bool(system_config.cf_cookies and system_config.cf_cookies.strip() not in ("", "your_cookies_here")),
     }
 
-    return render_template("settings.html", active_tab="settings", system_prompt=system_prompt, llm_configs=llm_configs, user_config=user_config)
+    # Cache Stats
+    total_cached = db.query(CachedProblem).count()
+    total_library = db.query(ProblemsetLibrary).count()
+
+    return render_template(
+        "settings.html",
+        active_tab="settings",
+        system_prompt=system_prompt,
+        llm_configs=llm_configs,
+        user_config=user_config,
+        total_cached=total_cached,
+        total_library=total_library
+    )
