@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ index }}. 正在准备题面 - CF 中文镜像站{% endblock %}
+
+{% block content %}
+<div class="problem-viewer-container">
+    <div class="problem-header-card" style="align-items: center;">
+        <div>
+            <h1 class="page-title" style="font-size: 24px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <span>{{ contest_id }}{{ index }}</span>
+                <span style="font-size: 14px; font-weight: normal; color: var(--text-secondary);">正在准备题面</span>
+            </h1>
+            <div class="problem-meta-list">
+                <div class="problem-meta-item">
+                    <i data-lucide="cloud" style="width: 16px; height: 16px;"></i>
+                    <span class="problem-meta-label">来源:</span>
+                    <span class="problem-meta-value">Codeforces</span>
+                </div>
+                <div class="problem-meta-item">
+                    <i data-lucide="languages" style="width: 16px; height: 16px;"></i>
+                    <span class="problem-meta-label">状态:</span>
+                    <span class="problem-meta-value" id="problem-loading-state">抓取与翻译中</span>
+                </div>
+            </div>
+        </div>
+        <div class="view-actions">
+            <button class="btn-secondary" id="problem-loading-retry" onclick="loadProblemNow()" style="display: none; padding: 10px 14px;">
+                <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
+                <span style="font-size: 13px;">重试</span>
+            </button>
+            <button class="search-button" onclick="openOfficialProblem()" style="padding: 10px 14px; display: flex; align-items: center; gap: 6px; border: none;">
+                <i data-lucide="external-link" style="width: 16px; height: 16px;"></i>
+                <span style="font-size: 13px;">打开官网</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="loading-container" id="problem-loading-card" style="min-height: 360px; text-align: center;">
+        <div class="spinner" id="problem-loading-spinner"></div>
+        <div style="display: flex; flex-direction: column; gap: 8px; align-items: center;">
+            <h2 id="problem-loading-title" style="font-size: 20px; font-weight: 800; color: var(--text-primary); margin: 0;">正在为您准备题面</h2>
+            <p id="problem-loading-detail" style="font-size: 14px; color: var(--text-secondary); max-width: 520px; line-height: 1.7; margin: 0;">
+                首次打开这道题需要抓取原题并生成中文题面，完成后页面会自动刷新。
+            </p>
+        </div>
+    </div>
+    <details class="import-panel" id="statement-import">
+        <summary>CF 访问受限？粘贴英文题面后翻译</summary>
+        <p>在官网完成浏览器验证，复制题目全文并粘贴到这里。支持原始题面 HTML（保留公式和样例结构）或纯文本；普通复制后的公式请对照原题检查。</p>
+        <form onsubmit="importStatement(event)">
+            <textarea id="import-statement" class="form-input" rows="10" required maxlength="500000" placeholder="粘贴英文题目全文，或包含 problem-statement 的网页源代码"></textarea>
+            <button class="search-button" type="submit">翻译粘贴的题面</button>
+            <a href="/settings" class="btn-secondary">配置翻译模型</a>
+        </form>
+    </details>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const LOADING_PROBLEM = {
+        contestId: {{ contest_id|tojson }},
+        problemIndex: {{ index|tojson }}
+    };
+
+    function setLoadingState(title, detail, type = 'loading') {
+        const titleEl = document.getElementById('problem-loading-title');
+        const detailEl = document.getElementById('problem-loading-detail');
+        const stateEl = document.getElementById('problem-loading-state');
+        const spinner = document.getElementById('problem-loading-spinner');
+        const retry = document.getElementById('problem-loading-retry');
+
+        titleEl.innerText = title;
+        detailEl.innerText = detail;
+        stateEl.innerText = type === 'error' ? '加载失败' : '抓取与翻译中';
+        stateEl.style.color = type === 'error' ? 'var(--danger)' : 'var(--text-primary)';
+        spinner.style.display = type === 'error' ? 'none' : 'block';
+        retry.style.display = type === 'error' ? 'flex' : 'none';
+        document.getElementById('problem-loading-card').style.minHeight = type === 'error' ? '180px' : '360px';
+        if (type === 'error') {
+            showToast(title, 'error');
+        }
+        window.lucide?.createIcons?.();
+    }
+
+    let loadingInProgress = false;
+    async function loadProblemNow(payload = {}) {
+        if (loadingInProgress) return;
+        loadingInProgress = true;
+        const { contestId, problemIndex } = LOADING_PROBLEM;
+        setLoadingState('正在准备题面', '正在连接本地翻译任务，完成后会自动打开题目。');
+        try {
+            await requestTranslation(contestId, problemIndex, payload);
+            await monitorTranslation(contestId, problemIndex, data => {
+                if (data.has_original) { window.location.reload(); return false; }
+                const labels = { queued: '等待翻译', scraping: '正在获取英文原题', translating: '正在生成中文题面' };
+                setLoadingState(labels[data.phase] || '正在准备题面', '任务在后台继续运行，可以保留此页面等待。');
+            });
+        } catch (error) {
+            setLoadingState('题面准备失败', error.message, 'error');
+            document.getElementById('statement-import').open = true;
+        } finally {
+            loadingInProgress = false;
+        }
+    }
+
+    function importStatement(event) {
+        event.preventDefault();
+        const statement = document.getElementById('import-statement').value;
+        loadProblemNow({ statement });
+    }
+
+    function openOfficialProblem() {
+        const { contestId, problemIndex } = LOADING_PROBLEM;
+        const contestPath = Number(contestId) >= 100000 ? 'gym' : 'contest';
+        window.open(`https://codeforces.com/${contestPath}/${contestId}/problem/${encodeURIComponent(problemIndex)}`, '_blank', 'noopener,noreferrer');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => loadProblemNow());
+</script>
+{% endblock %}

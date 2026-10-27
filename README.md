@@ -1,121 +1,151 @@
-# Codeforces AI 智能双语翻译镜像站 (Premium Mirror)
+# Codeforces 中文练习助手
 
-> [!CAUTION]
-> **🔒 本地自用安全警告与凭据保护提示 (Security & Credentials Warning)**
-> 本系统为**本地自用设计**，您在“管理后台”录入的 Codeforces Handle、登录 Cookie 以及大模型 API Key 均以明文安全保存在本地 SQLite 数据库 `cf_mirror.db` 中。
-> - **切勿将包含您真实私密数据的 `cf_mirror.db` 文件分享或提交至 GitHub 等任何公开仓库！**
-> - **切勿与他人分享您的 `cf_mirror.db` 数据库文件！**
-> - 本项目的 `.gitignore` 已预置安全防御规则自动拦截 `.db` 和 `.log` 文件，请务必保持防御配置开启，时刻保障个人账号资产安全。
+一个运行在本机的 Codeforces 中文题面与练习工具，方便不熟悉英文题面的用户日常刷题。
 
----
+**找题 → 翻译成中文 → 中英对照阅读 → 写代码 → 复制代码并打开 CF → 在官网手动提交。**
 
-这是一个为算法竞赛选手量身定制的 Codeforces 双语对照阅读与状态同步系统。本系统已经过全面架构重构，从原有的 FastAPI + React/TS 双端口前后端分离方案，整合迁移到了纯 Python 的 **Flask + Jinja2 + HTML/Vanilla JS 统一架构**，单端口、单进程运行，完全移除了 Node.js 与 npm 编译依赖。
+![练习页面预览](docs/practice-preview.png)
 
----
+> 截图使用离线测试数据，展示功能与排版，不代表实际模型的翻译质量。
 
-## 🏗️ 核心系统架构 (System Architecture)
+## 功能
 
-系统由以下核心模块协同运作，构建成工业级闭环：
+- **找题与筛选**：浏览公开题库和比赛，按名称、难度、算法标签筛选；输入 `4A` 或 CF 题目链接可以直接打开。
+- **中文与双语阅读**：通过兼容 Chat Completions 的模型接口翻译题面，支持中文、英文和双语模式，以及样例和完整题面的复制。
+- **公式保护**：翻译前保护公式与代码常量，返回后校验字段、占位符、HTML 结构、图片及链接。异常结果不会覆盖已有成功译文。
+- **本地缓存与批量翻译**：原题和译文保存到 SQLite；批量任务支持去重、追加、间隔等待和取消。
+- **代码草稿**：按题号保存在当前浏览器，支持文件导入、下载、Tab 缩进和 Ctrl+S。多个标签页会同步草稿，并检测同时编辑的冲突。
+- **官网手动提交**：点击“复制代码并前往 CF”，在官网粘贴、核对语言后提交。填写 CF Handle 后可同步公开的做题记录。
 
-```mermaid
-graph TD
-    A["Flask + Jinja2 + HTML/JS 页面"] -->|API 请求 / 页面跳转| B["Flask 后端服务器"]
-    B -->|1. 检查缓存 - 5ms| C[("SQLite 本地数据库 (cf_mirror.db)")]
-    B -->|2. 抓取题面 - 爬虫与容灾| D["Codeforces 官网/镜像站"]
-    B -->|3. 翻译引擎 - 多路链式回退| E["OpenAI / 各种大模型 API"]
-    C -->|缓存命中| A
-    D -->|解析 HTML 并缓存| C
-    E -->|格式化中文并缓存| C
-    B -->|同步做题/AC 状态| D
+代码区用于保存草稿，不提供本地编译或评测。官网提交、登录和人机验证由用户在浏览器中完成。
+
+## 快速开始
+
+推荐 **Python 3.12**（最低 3.10）和 [uv](https://docs.astral.sh/uv/getting-started/installation/)。
+
+```powershell
+git clone https://github.com/Aemeath233/codeforces-zh.git
+cd codeforces-zh
+uv sync --locked
+uv run python main.py
 ```
 
-1. **LaTeX 语法保护与爬虫模块 (`scraper.py`)**：
-   - 抓取 Codeforces 原站 HTML。提取标题、限制、题面描述、输入/输出说明、评测样例以及提示（Notes）。
-   - 内置 tokenizer 安全机制，对 Codeforces 原生 `$$$` 极其易碎的 LaTeX 标记进行捕获并清洗为标准 `$` 符号界定符，为 LLM 翻译做足语法保护。
+打开 [http://127.0.0.1:18780](http://127.0.0.1:18780)。服务默认仅监听本机。
 
-2. **MathJax 3 渲染系统与原生 JS 交互**：
-   - **离线渲染加载**：本地集成并版本控制了 MathJax 3 (包含 `color` 扩展)，不需要加载任何外部 CDN，完全本地离线渲染 SVG 格式公式，保障极速、稳定的公式展示体验。
-   - **原生 JS 调度 (`static/js/app.js`)**：使用纯原生 JavaScript (Vanilla JS) 异步请求 API，处理 Toast 消息队列、批量翻译队列 60s 冷却安全防风控计时、做题状态定时同步以及代码直接提交和评测 verdict 进度监控的轮询。
+### Windows 双击启动
 
-3. **大模型多路容灾翻译链 (`translator.py`)**：
-   - 允许用户在管理后台配置多组 LLM 模型节点（如 DeepSeek, GPT, Claude 等）。
-   - **链式降级回退（Fallback Chain）**：如果优先级最高的 API 发生限流或欠费报错，系统会自动无缝切换至备用 API，若全部失败，平滑切换至系统自愈的“模拟翻译模式”，确保流程不发生阻断性 Crash。
+首次执行 `uv sync --locked` 创建虚拟环境后：
 
-4. **双向本地持久化缓存层 (`database.py` & `main.py`)**：
-   - **题目缓存**：已翻译题目 100% 缓存入本地 SQLite，方便您在“本地已译题目”列表里进行零网络开销的历史查阅。
-   - **大厅缓存（6h TTL）**：比赛大厅引入了 6 小时生命期缓存。第二次加载大厅实现 **5ms 瞬间秒开**，彻底告别原版 CF 接口的漫长转圈圈。
-   - **离线安全高可用**：即使在断网状态，大厅依然允许加载过期缓存作为 Fallback，保障 100% 软件可用性。
+- 双击 `启动.vbs`：后台启动服务并打开浏览器；服务已运行时直接打开页面。
+- 双击 `停止.bat`：停止本项目记录并校验过身份的服务进程。
 
-5. **全链路高性能日志黑匣子 (`backend_app.log`)**：
-   - 拦截所有发起的 HTTP 流量。
-   - 自动在控制台与本地滚动日志中打印访问 IP、方法、路径、**毫秒级网络响应时长**以及 500 堆栈，方便硬核排错。
+### 使用 pip
 
----
+没有 uv 时，可以手动创建虚拟环境。以下为 Windows PowerShell 命令：
 
-## 📁 规范项目工程目录 (Project Tree)
+```powershell
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe main.py
+```
+
+macOS / Linux 对应使用 `.venv/bin/python` 启动，或按上面的 uv 命令运行。
+
+## 首次配置
+
+1. 打开“设置 → 大模型 API”，添加一个可用节点。
+2. 填写 API Key、模型名称和接口地址，例如 `https://api.example.com/v1`；地址不需要附加 `/chat/completions`。
+3. 按需测试连接，再从题库打开一道题目开始翻译。
+4. 如需显示做题状态，在账号设置中填写 CF Handle。
+
+支持多个模型节点按优先级回退。**连接测试和翻译都会调用你配置的模型接口，费用取决于服务商。**
+
+只需要 Handle 即可同步公开记录，不需要 CF 密码或 Cookie。模型密钥保存在本机数据库中。
+
+## 日常使用
+
+首次打开未缓存的题目时，工具在后台获取英文原题并生成译文。原题先保存，模型失败时仍能阅读英文，并可点击“重新翻译”。已有译文的题目重译失败时，上一份成功译文会保留。
+
+写好代码后，点击“复制代码并前往 CF”，到官网粘贴代码、核对题号和语言、手动提交。回到本地页面后会尝试同步做题状态，也可以点击“提交后刷新做题状态”。最终语言选择以 CF 提交页为准。
+
+批量翻译期间可以继续阅读题目。取消操作会让当前已进入处理的题目结束后停止后续任务；已完成的结果保留。清理缓存前，请先结束或取消相关翻译任务。
+
+### 自动抓题失败
+
+自动获取可能受网络故障、限流、浏览器验证或登录要求影响。工具保留原站与官方镜像的后备路径；失败时页面会显示原因，并提供手动导入入口：
+
+1. 点击“打开官网”，确认能正常看到题目，需要时在浏览器完成验证。
+2. 把英文题目全文粘贴到“CF 访问受限？粘贴英文题面后翻译”。
+3. 点击翻译，继续在本地阅读和练习。
+
+也可以粘贴包含 `problem-statement` 区域的原始 HTML，以保留公式和样例结构。纯文本可能已经丢失公式格式，请对照原题检查；纯文本导入会完整放入描述区，不猜测输入输出分区。
+
+## 数据与限制
+
+默认数据保存在项目目录，可以通过 `CF_MIRROR_DATA_DIR` 指定其他目录。例如 PowerShell：
+
+```powershell
+$env:CF_MIRROR_DATA_DIR = "$env:LOCALAPPDATA\CFMirror"
+uv run python main.py
+```
+
+| 文件或内容 | 用途 |
+| --- | --- |
+| `cf_mirror.db` | 原题、译文、题库、比赛缓存、做题记录和模型配置，包含模型密钥 |
+| `cf_mirror.db-wal`、`cf_mirror.db-shm` | SQLite 运行文件 |
+| `cf_mirror.db.before-v02.db.bak` | 旧数据库结构升级前生成的备份 |
+| `backend_app.log` 及轮转日志 | 本机运行日志 |
+| `cf_mirror.pid` | Windows 启停使用的进程身份记录 |
+| 浏览器本地存储 | 代码草稿、阅读模式和部分界面设置 |
+
+这些数据库、备份、日志和运行文件已加入 `.gitignore`。不要把包含密钥的数据库或备份上传到公开仓库；备份运行中的数据库时应使用 SQLite 备份方式，或先停止服务。
+
+- **保持单进程运行**：后台队列和限速保存在进程内，默认使用 Waitress 单进程、多线程。重启后需要重新发起未完成的任务，已保存的题面不受影响。
+- **草稿属于当前浏览器与访问地址**：`localhost` 和 `127.0.0.1` 的存储不共享；多页同时编辑冲突时，请下载各自代码后合并。
+- **离线阅读的范围**：文字、数学排版及本地界面资源可离线使用；题面的远程插图仍依赖网络。
+- **翻译需要英文对照**：结构校验无法保证语义完全正确，关键限定词、量词和边界条件应与原题核对。
+- **原题可能更新**：“重新翻译”使用缓存中的英文原题；需要重新获取官网修订时，先删除该题缓存，再打开题目。
+
+## 开发与验证
+
+技术栈：**Flask + Jinja2 + 原生 JavaScript + SQLite / SQLAlchemy**。没有前端构建步骤。
 
 ```text
-CF/
-├── templates/                # Jinja2 HTML 模板
-│   ├── base.html             # 基础骨架模板 (侧边栏、Toast通知、全局做题同步状态栏)
-│   ├── dashboard.html        # 官方比赛大厅
-│   ├── problemset.html       # 官方题库检索列表
-│   ├── problem.html          # 双语对照阅读与代码在线提交编辑器
-│   ├── cached.html           # 本地缓存题面历史
-│   └── settings.html         # 管理后台 (配置 LLM 节点与 CF Handle/Cookie)
-│
-├── static/                   # 静态资源
-│   ├── css/
-│   │   └── index.css         # 统一 CSS 样式 (保留原 React 原版色彩与动效)
-│   ├── js/
-│   │   └── app.js            # 原生 JavaScript 核心交互逻辑
-│   └── mathjax/              # 离线 MathJax 3 静态渲染 JS 库与图标
-│
-├── core/                     # 核心逻辑模块包 (子文件夹)
-│   ├── __init__.py           # 包初始化标识
-│   ├── database.py           # 数据库 ORM (SQLite 表结构与自动迁移)
-│   ├── scraper.py            # Codeforces HTML 题面解析及 LaTeX 捕获保护
-│   ├── translator.py         # LLM 容灾链智能翻译引擎
-│   ├── paths.py              # 本地持久化路径解析工具
-│   ├── cf_sync.py            # Codeforces API 数据同步与做题状态后台同步
-│   ├── pages.py              # Jinja2 渲染的页面路由 Blueprint
-│   └── api.py                # REST API JSON 接口路由 Blueprint
-│
-├── .gitignore                # Git 忽略清单 (防止敏感数据泄露)
-├── requirements.txt          # Python 依赖清单
-├── main.py                   # Flask 应用启动入口
-└── README.md                 # 软件工程系统架构与运维手册
+core/
+  api/                 本地 JSON 接口
+  scraper.py           CF 页面获取、题目和比赛列表解析
+  translator.py        模型调用、公式保护与译文校验
+  problem_service.py   单题与批量共用的翻译任务
+  cf_sync.py           题库、做题状态和批量队列
+  database.py          数据模型、SQLite 配置与迁移
+static/                样式、脚本和本地第三方资源
+templates/             Jinja2 页面
+tests/                 回归测试及离线预览
+main.py                本地服务入口
+launcher.py            Windows 启停辅助
 ```
 
----
+运行检查：
 
-## 🚀 部署与启动说明 (Deployment & Startup)
-
-因为完全摒弃了 Node.js 体系，部署和启动极其简单，仅需标准的 Python 环境。
-
-### 1. 安装依赖包
-请确保您的系统已安装 Python 3.8+。
-```bash
-pip install -r requirements.txt
+```powershell
+uv run python -m unittest discover -s tests -v
+node tests/frontend.cjs
 ```
 
-### 2. 启动服务
-- **本地调试启动**（支持代码热重载）：
-  ```bash
-  python main.py
-  ```
-  服务将在默认的 `http://127.0.0.1:8000` 端口运行。
+Node.js 仅用于前端回归脚本，正常使用无需安装。后端测试使用临时数据库，模型请求被替换，不会调用实际付费接口。
 
-- **服务器生产部署**：
-  推荐使用 `gunicorn` 或其他 WSGI 容器，以提升并发处理能力和稳定性：
-  ```bash
-  gunicorn main:app -b 127.0.0.1:8000 -w 4
-  ```
+启动隔离的离线预览：
 
----
+```powershell
+uv run python tests/preview_server.py
+```
 
-## 🔒 Codeforces 做题状态同步与高级设置
+打开 [http://127.0.0.1:18781/problem/4/A](http://127.0.0.1:18781/problem/4/A)。预览使用临时数据库和固定响应，不读取真实模型密钥。
 
-为了在本地镜像站自动同步并显示您在 Codeforces 的做题记录 (AC/FAILED 状态标记)：
-1. 您只需要前往镜像站的 **「管理后台 (设置)」** 中录入您的 **Codeforces 用户名 (Handle)**，即可立刻开启极速异步状态同步。AC 状态同步完全由公共接口拉取，**不需要提供任何密码或 Cookie 凭据**，保障您的账号资产安全！
-2. 浏览器登录 Cookies 仅作为高级/保留功能折叠在后台设置中（用于直接在线提交代码进行评测）。如无特殊需要，建议保持留空即可。如果需要在线提交功能，请确保正确获取并在设置中输入您在 `codeforces.com` 的 Session Cookie。
+开发调试可设置 `CF_MIRROR_DEBUG=1`；常规使用保持默认配置。具体审查记录见[首轮审查](docs/code-review.md)和 [2026-10-27 复审](docs/code-review-2026-10-27.md)。
+
+## 第三方资源
+
+- [Codeforces](https://codeforces.com/)：题目、比赛与公开做题记录来源。本项目为个人练习辅助工具，与 Codeforces 官方无关联。
+- [MathJax](https://www.mathjax.org/)：本地数学排版资源，许可见 [static/mathjax/LICENSE](static/mathjax/LICENSE)。
+- [Lucide](https://lucide.dev/)：本地图标资源，许可见 [static/js/lucide.LICENSE](static/js/lucide.LICENSE)。

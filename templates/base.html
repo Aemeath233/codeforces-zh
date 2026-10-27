@@ -4,22 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Codeforces 智能翻译镜像站{% endblock %}</title>
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- Local CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
     
-    <!-- Lucide Icons CDN -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="{{ url_for('static', filename='js/lucide.min.js') }}" defer></script>
 
     <!-- MathJax 3 Configuration -->
     <script>
       window.MathJax = {
         loader: {
-          load: ['[tex]/color']
+          load: ['[tex]/color', 'ui/safe']
         },
         tex: {
           packages: {'[+]': ['color']},
@@ -30,7 +25,11 @@
         },
         options: {
           ignoreHtmlClass: 'tex2jax_ignore',
-          processHtmlClass: 'tex2jax_process'
+          processHtmlClass: 'tex2jax_process',
+          safeOptions: {
+            allow: { URLs: 'safe', classes: 'safe', cssIDs: 'safe', styles: 'safe' },
+            safeProtocols: { http: true, https: true, file: false, javascript: false, data: false }
+          }
         }
       };
     </script>
@@ -42,42 +41,35 @@
     <div class="app-container">
         <!-- Top Navigation Bar -->
         <header class="top-navbar">
-            <ul class="nav-list">
-                <li class="nav-item {% if active_tab == 'problemset' %}active{% endif %}" onclick="window.location.href='/problemset'">
-                    <i data-lucide="graduation-cap" style="width: 16px; height: 16px;"></i>
-                    <span>官方题库列表</span>
+            <ul class="nav-list" aria-label="主导航">
+                {% for tab, path, icon, label in [
+                    ('problemset', '/problemset', 'graduation-cap', '题库'),
+                    ('dashboard', '/dashboard', 'layout-dashboard', '比赛'),
+                    ('cached', '/cached', 'history', '本地题目')
+                ] %}
+                <li><a class="nav-item {% if active_tab == tab %}active{% endif %}" href="{{ path }}" {% if active_tab == tab %}aria-current="page"{% endif %}>
+                    <i data-lucide="{{ icon }}" style="width:16px;height:16px;"></i><span>{{ label }}</span>
+                </a></li>
+                {% endfor %}
+                <li class="nav-item {% if active_tab == 'problem' %}active{% endif %}" id="nav-item-problem" style="display:none;">
+                    <i data-lucide="languages" style="width:16px;height:16px;"></i><span id="nav-problem-title">题面</span>
                 </li>
-                <li class="nav-item {% if active_tab == 'dashboard' %}active{% endif %}" onclick="window.location.href='/dashboard'">
-                    <i data-lucide="layout-dashboard" style="width: 16px; height: 16px;"></i>
-                    <span>官方比赛</span>
-                </li>
-                <li class="nav-item {% if active_tab == 'cached' %}active{% endif %}" onclick="window.location.href='/cached'">
-                    <i data-lucide="history" style="width: 16px; height: 16px;"></i>
-                    <span>本地已译题目</span>
-                </li>
-                <li class="nav-item {% if active_tab == 'problem' %}active{% endif %}" id="nav-item-problem" style="display: none;">
-                    <i data-lucide="languages" style="width: 16px; height: 16px;"></i>
-                    <span id="nav-problem-title">在线翻译阅读</span>
-                </li>
-                <li class="nav-item {% if active_tab == 'settings' %}active{% endif %}" onclick="window.location.href='/settings'">
-                    <i data-lucide="settings" style="width: 16px; height: 16px;"></i>
-                    <span>管理后台 (设置)</span>
-                </li>
+                <li><a class="nav-item {% if active_tab == 'settings' %}active{% endif %}" href="/settings" {% if active_tab == 'settings' %}aria-current="page"{% endif %}>
+                    <i data-lucide="settings" style="width:16px;height:16px;"></i><span>设置</span>
+                </a></li>
             </ul>
 
             <div class="navbar-right">
+                <a id="ac-sync-status-bar" href="/settings" style="display:none;max-width:260px;overflow:hidden;white-space:nowrap;font-size:12px;text-decoration:none;" aria-label="查看做题状态同步详情"></a>
                 <!-- Batch Translation Queue status (JS populated) -->
-                <div id="batch-queue-status" style="display: none; align-items: center; gap: 8px; backgroundColor: var(--primary-light, rgba(59, 130, 246, 0.08)); color: var(--primary); padding: 5px 12px; border-radius: 20px; border: 1px solid rgba(59, 130, 246, 0.15); font-size: 12.5px; font-weight: 600;">
+                <div id="batch-queue-status" style="display: none; align-items: center; gap: 8px; background-color: var(--primary-light, rgba(59, 130, 246, 0.08)); color: var(--primary); padding: 5px 12px; border-radius: 20px; border: 1px solid rgba(59, 130, 246, 0.15); font-size: 12.5px; font-weight: 600;">
                     <div class="spinner" style="width: 12px; height: 12px; border-width: 2px; border-top-color: var(--primary); animation-duration: 0.8s; flex-shrink: 0; margin: 0;"></div>
                     <span id="batch-progress-text">预热进度: 0/0</span>
                     <span id="batch-countdown-text" style="display: none; font-size: 11.5px; opacity: 0.8; color: #3b82f6; font-weight: 700; white-space: nowrap;">0s</span>
-                    <button id="batch-cancel-btn" style="background: none; border: none; color: #ef4444; cursor: pointer; fontSize: 11.5px; fontWeight: 700; marginLeft: 6px; padding: 2px 8px; borderRadius: 6px; backgroundColor: rgba(239, 68, 68, 0.08); display: inline-flex; alignItems: center; flex-shrink: 0;">取消</button>
+                    <button id="batch-cancel-btn" style="background: rgba(239, 68, 68, 0.08); border: none; color: #ef4444; cursor: pointer; font-size: 11.5px; font-weight: 700; margin-left: 6px; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; flex-shrink: 0;">取消</button>
                 </div>
 
-                <!-- AC Solved Sync status -->
-                <div id="ac-sync-status-bar" style="display: none; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 20px; font-size: 12.5px; font-weight: 600; cursor: pointer; user-select: none;">
-                    <!-- Content populated dynamically via app.js -->
-                </div>
+
 
             </div>
         </header>
@@ -102,13 +94,16 @@
         <div id="toast-container" style="position: fixed; bottom: 24px; right: 24px; z-index: 1000; display: flex; flex-direction: column; gap: 10px;">
             <!-- Toasts populated dynamically via app.js -->
         </div>
+
     </div>
 
     <!-- Core App JS -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     <script>
-        // Initialize Lucide Icons
-        lucide.createIcons();
+        // Initialize Lucide Icons after DOM loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.lucide?.createIcons?.();
+        });
     </script>
     {% block scripts %}{% endblock %}
 </body>

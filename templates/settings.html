@@ -72,12 +72,47 @@
                 </div>
             </div>
         </div>
+
+        <!-- Batch Translation Queue Status Card -->
+        <div id="batch-queue-card" style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium); display: flex; flex-direction: column; gap: 20px;">
+            <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="zap" style="color: var(--primary); width: 20px; height: 20px;"></i>
+                批量翻译队列状态
+            </h2>
+            <div id="batch-queue-details" style="border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; background-color: var(--bg-hover); display: flex; flex-direction: column; gap: 16px;">
+                <div style="font-size: 14px; color: var(--text-secondary); display: flex; align-items: center; gap: 10px;">
+                    <div class="spinner" style="width: 16px; height: 16px; border-width: 2px; margin: 0;"></div>
+                    <span>正在加载后台队列状态...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Running Logs Card -->
+        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium); display: flex; flex-direction: column; gap: 20px;">
+            <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="file-text" style="color: var(--primary); width: 20px; height: 20px;"></i>
+                系统运行日志 (System Logs)
+            </h2>
+            <div style="position: relative;">
+                <textarea id="system-logs-textarea" readonly style="width: 100%; height: 260px; font-family: var(--font-mono); font-size: 12px; background-color: var(--bg-hover); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; color: var(--text-primary); resize: vertical; line-height: 1.5; white-space: pre; overflow-x: auto; box-sizing: border-box;"></textarea>
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <button onclick="refreshSystemLogs()" class="search-button" style="display: flex; align-items: center; gap: 6px; padding: 10px 20px;">
+                    <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
+                    刷新日志
+                </button>
+                <button onclick="clearSystemLogsFile()" class="btn-secondary" style="display: flex; align-items: center; gap: 6px; padding: 10px 20px; border-color: var(--border-color);">
+                    <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                    清空日志
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Tab Pane 2: Account and Compiler -->
     <div id="pane-account" class="settings-content-pane">
         <!-- Codeforces Account Form -->
-        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; boxShadow: var(--shadow-premium);">
+        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium);">
             <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
                 <i data-lucide="user" style="color: var(--primary); width: 20px; height: 20px;"></i>
                 Codeforces 账户导入与登录凭证设置 (用于同步做题/AC状态)
@@ -87,7 +122,7 @@
                 <div style="display: flex; flex-direction: column; gap: 16px;">
                     <div class="form-group" style="max-width: 400px;">
                         <label class="form-label" for="cfHandle">
-                            CF 用户名 (Handle) *
+                            CF 用户名 (Handle)
                         </label>
                         <input
                             id="cfHandle"
@@ -95,10 +130,9 @@
                             class="form-input"
                             placeholder="例如: tourist"
                             value="{{ user_config.cf_handle or '' }}"
-                            required
                         />
                         <span style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: inline-block;">
-                            仅需填写用户名即可自动同步并标记已通过的题目，无需输入密码或 Cookie。
+                            仅用于从 Codeforces 同步并标记您的已通过（AC）题目状态。
                         </span>
                     </div>
 
@@ -111,65 +145,44 @@
                             class="form-input"
                             style="font-weight: 600; cursor: pointer;"
                         >
-                            <option value="91">GNU G++23 14.2 (C++23)</option>
-                            <option value="89">GNU G++20 13.2 (C++20)</option>
-                            <option value="54">GNU G++17 7.3.0 (C++17)</option>
-                            <option value="31">Python 3.8.10</option>
-                            <option value="70">PyPy 3.10 (7.3.15)</option>
-                            <option value="87">Java 21 64bit</option>
-                            <option value="60">Java 17 64bit</option>
-                            <option value="75">Rust 1.75.0</option>
-                            <option value="55">Node.js 20.11.1</option>
+                            <option value="">使用官网记住的语言</option>
+                            <option value="91">C++23</option>
+                            <option value="89">C++20</option>
+                            <option value="54">C++17</option>
+                            <option value="31">Python 3</option>
+                            <option value="70">PyPy 3</option>
+                            <option value="87">Java 21</option>
+                            <option value="60">Java 17</option>
+                            <option value="75">Rust</option>
+                            <option value="55">JavaScript</option>
                         </select>
                         <span style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: inline-block;">
                             用于在题目详情页中点击“前往提交”时预选并自动带入官网页面。
                         </span>
                     </div>
 
-                    <!-- Advanced Section Toggle -->
-                    <div style="margin-top: 4px;">
-                        <button
-                            type="button"
-                            onclick="toggleAdvanced()"
-                            class="btn-secondary"
-                            style="padding: 6px 12px; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 4px;"
-                        >
-                            <span id="advanced-toggle-text">显示高级设置 (Cookie 保留用途)</span>
-                        </button>
+                    <div class="form-group" style="max-width: 400px;">
+                        <label class="form-label" for="batchCooldown">
+                            批量翻译冷却时间 (秒) *
+                        </label>
+                        <input
+                            id="batchCooldown"
+                            type="number"
+                            class="form-input"
+                            placeholder="例如: 60"
+                            value="{{ user_config.batch_cooldown if user_config.batch_cooldown is not none else 60 }}"
+                            min="0"
+                            required
+                        />
+                        <span style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: inline-block;">
+                            批量翻译时每翻译完一题，等待多少秒再翻译下一题，以防被 API 服务商或 Codeforces 封禁。
+                        </span>
                     </div>
 
-                    <div id="advanced-cookie-section"
-                        style="display: none; flex-direction: column; gap: 16px; padding: 20px; background-color: var(--bg-hover); border-radius: 12px; border: 1px solid var(--border-color); margin-top: 4px;"
-                    >
-                        <div class="form-group" style="margin: 0;">
-                            <label class="form-label" for="cfCookies">
-                                浏览器登录 Cookies (高级保留用途 - 默认留空)
-                            </label>
-                            <input
-                                id="cfCookies"
-                                type="password"
-                                class="form-input"
-                                placeholder="{% if user_config.cf_cookies_configured %}已导入 Cookies: **** (粘贴新值可进行覆盖){% else %}通常留空即可。如需保留以作未来接口代理提交等高级用途，请粘贴您的 Cookie{% endif %}"
-                                value="{% if user_config.cf_cookies_configured %}****{% endif %}"
-                            />
-                        </div>
-                        <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
-                            <b>两步教您如何快速获取 Cookies 字符串：</b>
-                            <ol style="margin-left: 20px; margin-top: 6px;">
-                                <li>用 Chrome/Edge 浏览器打开并登录 <a href="https://codeforces.com" target="_blank" rel="noreferrer" style="color: var(--primary); font-weight: 600;">codeforces.com</a>。</li>
-                                <li>按键盘 <b>F12</b> 键打开开发者工具 &rarr; 切换到顶部的 <b>“控制台 (Console)”</b> &rarr; 输入 <code>document.cookie</code> 回车 &rarr; **复制返回的整段带引号的字符串文本**，直接贴到上面的输入框即可！</li>
-                            </ol>
-                            {% if user_config.cf_cookies_configured %}
-                            <div id="cookie-status-badge" style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--success); margin-top: 8px; font-weight: 600;">
-                                <i data-lucide="shield-check" style="width: 16px; height: 16px;"></i> 本地 Cookie 凭证已导入（目前代理提交默认关闭，Cookie 仅作为高级用途保留）。
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
                 </div>
 
                 <button type="submit" id="save-user-btn" class="search-button" style="width: fit-content; padding: 10px 24px;">
-                    保存登录凭证
+                    保存设置
                 </button>
             </form>
         </div>
@@ -178,7 +191,7 @@
     <!-- Tab Pane 3: API Configurations -->
     <div id="pane-api" class="settings-content-pane">
         <!-- LLM Node list and active controls -->
-        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; boxShadow: var(--shadow-premium);">
+        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                 <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0;">
                     智能翻译大模型节点链 (API Fallback Chain)
@@ -189,7 +202,7 @@
                 </button>
             </div>
 
-            <div style="display: flex; flexDirection: column; gap: 16px;">
+            <div style="display: flex; flex-direction: column; gap: 16px;">
                 {% if llm_configs|length == 0 %}
                 <div style="padding: 40px; text-align: center; color: var(--text-muted); border: 1px dashed var(--border-color); border-radius: 10px;">
                     当前暂未配置任何大模型 API 节点。请点击右上角按钮添加。
@@ -269,6 +282,8 @@
         </form>
     </div>
 
+
+
     <!-- Modal Form (Hidden by default, kept outside tab panes) -->
     <div id="node-modal-overlay" class="modal-overlay" style="display: none; z-index: 1000;">
         <form id="node-form" onsubmit="saveNode(event)" class="settings-form" style="border: 2px solid var(--primary); max-width: 600px; width: 90%; background: var(--bg-card); position: relative;">
@@ -296,8 +311,8 @@
                         type="number"
                         id="formPriority"
                         class="form-input"
-                        min="1"
-                        max="10"
+                        min="0"
+                        max="10000"
                         required
                     />
                 </div>
@@ -351,401 +366,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-    // Tab switching logic for settings page
-    function switchSettingsTab(tabName) {
-        document.querySelectorAll('.settings-content-pane').forEach(pane => {
-            pane.classList.remove('active');
-        });
-        document.querySelectorAll('.settings-tab').forEach(tab => {
-            tab.classList.remove('active');
-        });
-
-        const pane = document.getElementById(`pane-${tabName}`);
-        const tabBtn = document.getElementById(`tab-btn-${tabName}`);
-        
-        if (pane && tabBtn) {
-            pane.classList.add('active');
-            tabBtn.classList.add('active');
-            localStorage.setItem('settings_active_tab', tabName);
-        }
-
-        // Fetch running status details when status tab is active
-        if (tabName === 'status') {
-            loadStatusTabDetails();
-        }
-    }
-
-    // Fetch and render settings status details
-    async function loadStatusTabDetails() {
-        const card = document.getElementById('status-sync-details-card');
-        if (!card) return;
-
-        try {
-            const response = await fetch('/api/user/status-sync');
-            if (response.ok) {
-                const data = await response.json();
-                
-                if (data.handle) {
-                    let statusHtml = '';
-                    if (data.syncing) {
-                        statusHtml = `
-                            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--warning);">
-                                <div class="spinner" style="width: 14px; height: 14px; border-width: 2px; border-top-color: var(--warning); animation-duration: 0.8s; margin: 0;"></div>
-                                <span>后台同步任务正在进行中 (Syncing...)</span>
-                            </div>
-                        `;
-                    } else if (data.last_error) {
-                        statusHtml = `
-                            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--danger);">
-                                <span style="width: 8px; height: 8px; background-color: var(--danger); border-radius: 50%;"></span>
-                                <span>上次同步失败: ${escapeHtml(data.last_error)}</span>
-                            </div>
-                        `;
-                    } else {
-                        statusHtml = `
-                            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--success);">
-                                <span style="width: 8px; height: 8px; background-color: var(--success); border-radius: 50%;"></span>
-                                <span>同步状态健康 (Connected)</span>
-                            </div>
-                        `;
-                    }
-
-                    const syncTime = data.last_fetched > 0 ? new Date(data.last_fetched * 1000).toLocaleString() : '从无';
-
-                    card.innerHTML = `
-                        <div style="display: flex; flex-direction: column; gap: 16px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <div>
-                                        <div style="font-weight: 700; font-size: 16px; color: var(--text-primary);">${escapeHtml(data.handle)}</div>
-                                        <div style="font-size: 12px; color: var(--text-secondary);">已绑定的 Codeforces 账号</div>
-                                    </div>
-                                </div>
-                                ${statusHtml}
-                            </div>
-                            
-                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; text-align: center;">
-                                <div style="background-color: var(--bg-card); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">已通过题目 (AC)</div>
-                                    <strong style="font-size: 20px; color: var(--success);">${data.accepted_count || 0} 题</strong>
-                                </div>
-                                <div style="background-color: var(--bg-card); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">尝试未通过</div>
-                                    <strong style="font-size: 20px; color: var(--warning);">${data.failed_count || 0} 题</strong>
-                                </div>
-                                <div style="background-color: var(--bg-card); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">同步总条数</div>
-                                    <strong style="font-size: 20px; color: var(--text-primary);">${data.record_count || 0} 条</strong>
-                                </div>
-                            </div>
-
-                            <div style="font-size: 12.5px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
-                                <span>上次同步成功时间:</span>
-                                <strong>${syncTime}</strong>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    card.innerHTML = `
-                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center;">
-                            <div style="font-weight: 700; color: var(--text-primary);">您尚未绑定 Codeforces 账号</div>
-                            <p style="font-size: 13px; color: var(--text-secondary); max-width: 450px;">
-                                绑定 Codeforces 账号后，本地系统可以自动拉取您的 AC 记录并在题库中高亮标记。
-                            </p>
-                            <button onclick="switchSettingsTab('account')" class="btn-secondary" style="padding: 8px 16px; margin-top: 4px;">
-                                立即前往导入账号
-                            </button>
-                        </div>
-                    `;
-                }
-            }
-            // Re-initialize icons inside settings panel
-            if (typeof lucide !== 'undefined' && lucide.createIcons) {
-                lucide.createIcons();
-            }
-        } catch (error) {
-            console.error('Failed to load status details:', error);
-            card.innerHTML = `<div style="color: var(--danger); font-weight: 600;">获取状态详情失败，请检查网络。</div>`;
-        }
-    }
-
-    // Helper to escape HTML strings inside JS
-    function escapeHtml(str) {
-        if (!str) return '';
-        return str
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
-
-    // Load cached compiler settings on initialization
-    const cachedCompiler = localStorage.getItem('cf_compiler_id') || '89';
-    document.getElementById('cfCompiler').value = cachedCompiler;
-
-    // Load active settings tab on load
-    const activeSettingsTab = localStorage.getItem('settings_active_tab') || 'status';
-    switchSettingsTab(activeSettingsTab);
-
-    // Toggle advanced section
-    let isAdvancedOpen = false;
-    function toggleAdvanced() {
-        isAdvancedOpen = !isAdvancedOpen;
-        const section = document.getElementById('advanced-cookie-section');
-        const text = document.getElementById('advanced-toggle-text');
-        if (isAdvancedOpen) {
-            section.style.display = 'flex';
-            text.innerText = '隐藏高级设置 (Cookie)';
-        } else {
-            section.style.display = 'none';
-            text.innerText = '显示高级设置 (Cookie 保留用途)';
-        }
-    }
-
-    // Save CF credentials
-    async function saveUserAuth(e) {
-        e.preventDefault();
-        const handle = document.getElementById('cfHandle').value.trim();
-        const compiler = document.getElementById('cfCompiler').value;
-        let cookies = document.getElementById('cfCookies').value;
-
-        if (!handle) {
-            showToast('用户名 (Handle) 不能为空！', 'error');
-            return;
-        }
-
-        // Save compiler choice to localstorage
-        localStorage.setItem('cf_compiler_id', compiler);
-
-        const btn = document.getElementById('save-user-btn');
-        btn.innerText = '正在保存凭证...';
-        btn.disabled = true;
-
-        try {
-            const response = await fetch('/api/config/user', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    cf_handle: handle,
-                    cf_cookies: cookies === '****' ? null : cookies
-                })
-            });
-            if (response.ok) {
-                showToast('Codeforces 登录凭证保存成功！做题状态同步功能已激活。', 'success');
-                // Refresh local status bar
-                triggerAcStatusSync();
-            } else {
-                showToast('保存登录凭证失败', 'error');
-            }
-        } catch (e) {
-            console.error(e);
-            showToast('网络错误，保存凭证失败', 'error');
-        } finally {
-            btn.innerText = '保存登录凭证';
-            btn.disabled = false;
-        }
-    }
-
-    // Modal helpers
-    function openAddForm() {
-        document.getElementById('modal-title').innerText = '添加全新大模型 API 节点';
-        document.getElementById('formNodeId').value = '';
-        document.getElementById('formName').value = '';
-        document.getElementById('formApiKey').value = '';
-        document.getElementById('formBaseUrl').value = 'https://api.openai.com/v1';
-        document.getElementById('formModel').value = 'gpt-4o-mini';
-        document.getElementById('formPriority').value = '1';
-        
-        document.getElementById('node-modal-overlay').style.display = 'flex';
-    }
-
-    function openEditForm(node) {
-        document.getElementById('modal-title').innerText = '修改 API 节点参数';
-        document.getElementById('formNodeId').value = node.id;
-        document.getElementById('formName').value = node.name;
-        document.getElementById('formApiKey').value = node.api_key_configured ? '****' : '';
-        document.getElementById('formBaseUrl').value = node.base_url;
-        document.getElementById('formModel').value = node.model;
-        document.getElementById('formPriority').value = node.priority;
-        
-        document.getElementById('node-modal-overlay').style.display = 'flex';
-    }
-
-    function closeModal() {
-        document.getElementById('node-modal-overlay').style.display = 'none';
-    }
-
-    // Save LLM Node
-    async function saveNode(e) {
-        e.preventDefault();
-        const nodeId = document.getElementById('formNodeId').value;
-        const name = document.getElementById('formName').value.trim();
-        const priority = parseInt(document.getElementById('formPriority').value, 10) || 1;
-        const apiKey = document.getElementById('formApiKey').value;
-        const baseUrl = document.getElementById('formBaseUrl').value.trim();
-        const model = document.getElementById('formModel').value.trim();
-
-        if (!name) {
-            showToast('请填写节点标识名称！', 'error');
-            return;
-        }
-
-        const btn = document.getElementById('save-node-btn');
-        btn.innerText = '正在保存...';
-        btn.disabled = true;
-
-        try {
-            const response = await fetch('/api/config/llm', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id: nodeId ? parseInt(nodeId) : null,
-                    name: name,
-                    api_key: apiKey === '****' ? null : apiKey,
-                    base_url: baseUrl,
-                    model: model,
-                    priority: priority,
-                    is_active: true
-                })
-            });
-
-            if (response.ok) {
-                showToast(nodeId ? 'API 节点已更新！' : 'API 节点添加成功！', 'success');
-                closeModal();
-                window.location.reload();
-            } else {
-                showToast('保存 API 节点失败', 'error');
-            }
-        } catch (e) {
-            console.error(e);
-            showToast('网络错误，保存节点失败', 'error');
-        } finally {
-            btn.innerText = '确认并保存节点';
-            btn.disabled = false;
-        }
-    }
-
-    // Toggle node active status
-    async function toggleActive(node) {
-        try {
-            const response = await fetch('/api/config/llm', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id: node.id,
-                    name: node.name,
-                    base_url: node.base_url,
-                    model: node.model,
-                    priority: node.priority,
-                    is_active: !node.is_active
-                })
-            });
-            if (response.ok) {
-                showToast(`${node.name} 已${!node.is_active ? '启用' : '禁用'}`, 'success');
-                window.location.reload();
-            }
-        } catch (e) {
-            console.error(e);
-        }
-    }
-
-    // Delete LLM Node
-    async function deleteNode(id) {
-        if (!confirm('您确定要删除这个 API 节点吗？')) return;
-        try {
-            const response = await fetch(`/api/config/llm/${id}`, {
-                method: 'DELETE'
-            });
-            if (response.ok) {
-                showToast('API 节点已成功移除！', 'success');
-                window.location.reload();
-            } else {
-                showToast('移除 API 节点失败', 'error');
-            }
-        } catch (e) {
-            console.error(e);
-            showToast('网络错误，删除失败', 'error');
-        }
-    }
-
-    // Test connection
-    async function testNode(node) {
-        const resultDiv = document.getElementById(`test-result-${node.id}`);
-        resultDiv.style.display = 'flex';
-        resultDiv.style.backgroundColor = 'var(--bg-main)';
-        resultDiv.style.color = 'var(--text-primary)';
-        resultDiv.style.border = '1px solid var(--border-color)';
-        resultDiv.innerHTML = `<div class="spinner" style="width: 16px; height: 16px; border-width: 2px; margin: 0;"></div><span>正在发送轻量级 token 测试连接...</span>`;
-
-        showToast(`正在向 ${node.name} 发送测试连接...`, 'success');
-
-        try {
-            const response = await fetch('/api/config/test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id: node.id,
-                    api_key: '****',
-                    base_url: node.base_url,
-                    model: node.model
-                })
-            });
-
-            const data = await response.json();
-            if (response.ok) {
-                resultDiv.style.backgroundColor = 'var(--success-bg)';
-                resultDiv.style.color = 'var(--success)';
-                resultDiv.style.border = '1px solid rgba(22, 101, 52, 0.2)';
-                resultDiv.innerHTML = `<i data-lucide="check-circle-2" style="width:16px; height:16px;"></i><span>连接成功！大模型响应内容: <b>“${data.reply}”</b> (连通性完美)</span>`;
-                showToast(`测试成功！大模型已成功响应。`, 'success');
-            } else {
-                resultDiv.style.backgroundColor = 'var(--danger-bg)';
-                resultDiv.style.color = 'var(--danger)';
-                resultDiv.style.border = '1px solid rgba(153, 27, 27, 0.2)';
-                resultDiv.innerHTML = `<i data-lucide="alert-circle" style="width:16px; height:16px;"></i><span>连接失败！故障详情: <code>${data.detail || '接口连接失败，请检查配置'}</code></span>`;
-                showToast(`测试失败：${data.detail || '无法连接'}`, 'error');
-            }
-            lucide.createIcons();
-        } catch (e) {
-            console.error(e);
-            resultDiv.style.backgroundColor = 'var(--danger-bg)';
-            resultDiv.style.color = 'var(--danger)';
-            resultDiv.style.border = '1px solid rgba(153, 27, 27, 0.2)';
-            resultDiv.innerHTML = `<i data-lucide="alert-circle" style="width:16px; height:16px;"></i><span>网络错误，无法连接接口</span>`;
-            showToast('连接测试失败，请检查本地后端状态。', 'error');
-            lucide.createIcons();
-        }
-    }
-
-    // Save prompt tuner
-    async function savePrompt(e) {
-        e.preventDefault();
-        const prompt = document.getElementById('systemPrompt').value;
-        const btn = document.getElementById('save-prompt-btn');
-        btn.innerText = '正在保存...';
-        btn.disabled = true;
-
-        try {
-            const response = await fetch('/api/config/system_prompt', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ system_prompt: prompt })
-            });
-            if (response.ok) {
-                showToast('系统翻译提示词保存成功！', 'success');
-            } else {
-                showToast('系统提示词保存失败', 'error');
-            }
-        } catch (e) {
-            console.error(e);
-            showToast('网络错误，无法保存提示词', 'error');
-        } finally {
-            btn.innerHTML = `<i data-lucide="save" style="width:16px; height:16px;"></i>保存系统提示词`;
-            btn.disabled = false;
-            lucide.createIcons();
-        }
-    }
-</script>
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
 {% endblock %}

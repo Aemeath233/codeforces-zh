@@ -18,17 +18,17 @@
                 <div class="problem-meta-item">
                     <i data-lucide="clock" style="width: 16px; height: 16px;"></i>
                     <span class="problem-meta-label">单点时限:</span>
-                    <span class="problem-meta-value">{{ problem.time_limit }}</span>
+                    <span class="problem-meta-value">{{ problem.time_limit or '未提供' }}</span>
                 </div>
                 <div class="problem-meta-item">
                     <i data-lucide="cpu" style="width: 16px; height: 16px;"></i>
                     <span class="problem-meta-label">内存限制:</span>
-                    <span class="problem-meta-value">{{ problem.memory_limit }}</span>
+                    <span class="problem-meta-value">{{ problem.memory_limit or '未提供' }}</span>
                 </div>
                 <div class="problem-meta-item">
                     <i data-lucide="file-text" style="width: 16px; height: 16px;"></i>
                     <span class="problem-meta-label">标准输入/输出:</span>
-                    <span class="problem-meta-value">{{ problem.input_file }} / {{ problem.output_file }}</span>
+                    <span class="problem-meta-value">{{ problem.input_file or '未提供' }} / {{ problem.output_file or '未提供' }}</span>
                 </div>
             </div>
         </div>
@@ -39,6 +39,7 @@
             <div style="display: flex; border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;">
                 <button
                     id="btn-view-bilingual"
+                    {% if problem.translation_status != 'translated' %}disabled{% endif %}
                     class="btn-secondary"
                     onclick="setViewMode('bilingual')"
                     style="border: none; border-radius: 0; padding: 10px 14px;"
@@ -49,6 +50,7 @@
                 </button>
                 <button
                     id="btn-view-chinese"
+                    {% if problem.translation_status != 'translated' %}disabled{% endif %}
                     class="btn-secondary active"
                     onclick="setViewMode('chinese')"
                     style="border: none; border-left: 1px solid var(--border-color); border-radius: 0; padding: 10px 14px;"
@@ -75,7 +77,7 @@
                 id="force-refresh-btn"
                 onclick="forceRefreshTranslation()"
                 style="padding: 10px 14px;"
-                title="强制重抓重译"
+                title="使用已缓存的英文原题重新翻译"
             >
                 <i data-lucide="refresh-cw" id="refresh-icon" style="width: 16px; height: 16px;"></i>
                 <span style="font-size: 13px;">重新翻译</span>
@@ -92,6 +94,11 @@
                 <span style="font-size: 13px;">前往提交</span>
             </button>
         </div>
+    </div>
+
+    <div id="translation-status" class="translation-notice" {% if problem.translation_status == 'translated' %}hidden{% endif %} role="status" aria-live="polite">
+        <span id="translation-status-text">中文题面尚未生成，当前展示英文原题。请配置翻译模型后点击“重新翻译”。</span>
+        <a href="/settings">翻译设置</a>
     </div>
 
     <!-- 2. Reader Body (Bilingual columns) -->
@@ -183,7 +190,8 @@
         </div>
 
         <!-- 3. Sample Tests & Note (Always full width at bottom) -->
-        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; boxShadow: var(--shadow-premium);">
+        {% if problem.samples or has_note %}
+        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium);">
             <!-- Samples -->
             {% if problem.samples %}
             <div>
@@ -202,22 +210,22 @@
                             <div class="sample-input-cell">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <div class="sample-cell-title">输入 (Input)</div>
-                                    <button class="sample-copy-btn" onclick="copyText('{{ sample.input|replace('\n', '\\n')|replace("'", "\\'") }}', '输入')">
+                                    <button class="sample-copy-btn" onclick='copyText({{ sample.input|tojson }}, "输入")' >
                                         <i data-lucide="copy" style="width: 12px; height: 12px;"></i>
                                         <span>复制输入</span>
                                     </button>
                                 </div>
-                                <pre class="sample-pre">{{ sample.input }}</pre>
+                                <pre class="sample-pre">{% if sample.input_lines %}{% for line in sample.input_lines %}<div class="sample-line {{ line.class }}"{% if line.group is defined and line.group is not none %} data-group="{{ line.group }}"{% endif %}>{{ line.text }}</div>{% endfor %}{% else %}{{ sample.input }}{% endif %}</pre>
                             </div>
                             <div class="sample-output-cell">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <div class="sample-cell-title">输出 (Output)</div>
-                                    <button class="sample-copy-btn" onclick="copyText('{{ sample.output|replace('\n', '\\n')|replace("'", "\\'") }}', '输出')">
+                                    <button class="sample-copy-btn" onclick='copyText({{ sample.output|tojson }}, "输出")' >
                                         <i data-lucide="copy" style="width: 12px; height: 12px;"></i>
                                         <span>复制输出</span>
                                     </button>
                                 </div>
-                                <pre class="sample-pre">{{ sample.output }}</pre>
+                                <pre class="sample-pre">{% if sample.output_lines %}{% for line in sample.output_lines %}<div class="sample-line {{ line.class }}"{% if line.group is defined and line.group is not none %} data-group="{{ line.group }}"{% endif %}>{{ line.text }}</div>{% endfor %}{% else %}{{ sample.output }}{% endif %}</pre>
                             </div>
                         </div>
                     </div>
@@ -249,246 +257,63 @@
             </div>
             {% endif %}
         </div>
+        {% endif %}
     </div>
 
-    <!-- 4. Compact Bottom Submit Button -->
-    <div style="display: flex; justify-content: center; margin-top: 24px;">
-        <button
-            onclick="submitToOfficial()"
-            class="search-button"
-            style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 28px; font-size: 14px; font-weight: 600; cursor: pointer;"
-            title="立即前往官网提交本题"
-        >
-            <i data-lucide="send" style="width: 16px; height: 16px;"></i>
-            提交解答至 Codeforces 官网 (Submit Solution)
-        </button>
-    </div>
+    <section class="practice-workspace tex2jax_ignore">
+        <div class="workspace-heading">
+            <h2 class="panel-title">代码草稿</h2>
+            <span id="draft-status" role="status" aria-live="polite">草稿按题目保存在当前浏览器</span>
+        </div>
+        <p class="workspace-help">可以在这里写代码，也可以从自己的编辑器粘贴。点击“复制代码并前往 CF”，到官网粘贴代码并手动提交。</p>
+        <div class="workspace-toolbar">
+            <label for="submit-compiler">提交语言</label>
+            <select id="submit-compiler" class="form-input" aria-label="提交语言">
+                <option value="">使用官网记住的语言</option>
+                <option value="91">C++23</option>
+                <option value="89">C++20</option>
+                <option value="54">C++17</option>
+                <option value="31">Python 3</option>
+                <option value="70">PyPy 3</option>
+                <option value="87">Java 21</option>
+                <option value="75">Rust</option>
+            </select>
+            <label class="btn-secondary source-file-label">导入代码文件<input type="file" id="source-file" accept=".cpp,.cc,.c,.h,.py,.java,.rs,.js,.ts,.kt,.go,.txt"></label>
+        </div>
+        <textarea id="code-draft" class="code-draft" rows="18" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="本题代码草稿" placeholder="在这里输入或粘贴代码…"></textarea>
+        <div class="workspace-actions">
+            <button id="copy-submit-btn" class="search-button" onclick="copyCodeAndSubmit()">复制代码并前往 CF</button>
+            <button class="btn-secondary" onclick="submitToOfficial()">只打开提交页</button>
+            <button class="btn-secondary" onclick="downloadDraft()">下载代码</button>
+            <button class="btn-secondary" onclick="refreshProblemStatus()">提交后刷新做题状态</button>
+        </div>
+        <p class="workspace-help">官网需要登录并完成浏览器验证。题号会带入提交页，语言以官网最终显示为准。草稿仅保存在当前浏览器，请及时下载重要代码。</p>
+    </section>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    let viewMode = 'chinese'; // 'bilingual' | 'chinese' | 'english'
-    const contestId = {{ problem.contest_id }};
-    const problemIndex = '{{ problem.index }}';
-
-    // Load active tab highlight in sidebar/topbar
-    const activeTabItem = document.getElementById('nav-item-problem');
-    if (activeTabItem) {
-        activeTabItem.style.display = 'flex';
-        document.getElementById('nav-problem-title').innerText = `${contestId}${problemIndex}`;
-    }
-
-    // Toggle view modes
-    function setViewMode(mode) {
-        viewMode = mode;
-        
-        // Update buttons
-        document.getElementById('btn-view-bilingual').classList.remove('active');
-        document.getElementById('btn-view-chinese').classList.remove('active');
-        document.getElementById('btn-view-english').classList.remove('active');
-
-        document.getElementById(`btn-view-${mode}`).classList.add('active');
-
-        const split = document.getElementById('problem-columns-split');
-        const zhCol = document.getElementById('chinese-column');
-        const enCol = document.getElementById('english-column');
-        const zhHeader = document.getElementById('chinese-header-tab');
-        const enHeader = document.getElementById('english-header-tab');
-
-        const copyZh = document.getElementById('copy-zh-btn');
-        const copyEn = document.getElementById('copy-en-btn');
-
-        if (mode === 'bilingual') {
-            split.classList.remove('single-column');
-            zhCol.style.display = 'block';
-            enCol.style.display = 'block';
-            zhHeader.style.display = 'block';
-            enHeader.style.display = 'block';
-            copyZh.style.top = '12px';
-            copyEn.style.top = '12px';
-        } else if (mode === 'chinese') {
-            split.classList.add('single-column');
-            zhCol.style.display = 'block';
-            enCol.style.display = 'none';
-            zhHeader.style.display = 'none';
-            copyZh.style.top = '20px';
-        } else if (mode === 'english') {
-            split.classList.add('single-column');
-            zhCol.style.display = 'none';
-            enCol.style.display = 'block';
-            enHeader.style.display = 'none';
-            copyEn.style.top = '20px';
-        }
-
-        // Toggle Note layout if it exists
-        const noteSection = document.getElementById('note-bilingual-section');
-        if (noteSection) {
-            const noteSplit = document.getElementById('note-columns-split');
-            const noteZhCol = document.getElementById('chinese-note-col');
-            const noteEnCol = document.getElementById('english-note-col');
-
-            if (mode === 'bilingual') {
-                noteSplit.classList.remove('single-column');
-                noteZhCol.style.display = 'block';
-                noteEnCol.style.display = 'block';
-            } else if (mode === 'chinese') {
-                noteSplit.classList.add('single-column');
-                noteZhCol.style.display = 'block';
-                noteEnCol.style.display = 'none';
-            } else if (mode === 'english') {
-                noteSplit.classList.add('single-column');
-                noteZhCol.style.display = 'none';
-                noteEnCol.style.display = 'block';
-            }
-        }
-    }
-
-    // Force refresh translation
-    async function forceRefreshTranslation() {
-        const btn = document.getElementById('force-refresh-btn');
-        const icon = document.getElementById('refresh-icon');
-        btn.disabled = true;
-        icon.classList.add('spinner');
-
-        showToast('正在为您重构并重新翻译题面，请稍候...', 'success');
-
-        try {
-            const response = await fetch(`/api/problem/${contestId}/${problemIndex}?force_refresh=true`);
-            if (response.ok) {
-                showToast('重新翻译成功！已更新题面。', 'success');
-                window.location.reload();
-            } else {
-                const err = await response.json();
-                showToast(err.detail || '重构翻译失败，请检查配置或网络', 'error');
-            }
-        } catch (error) {
-            console.error(error);
-            showToast('网络错误，重新翻译失败', 'error');
-        } finally {
-            btn.disabled = false;
-            icon.classList.remove('spinner');
-        }
-    }
-
-    // Forward to official submit
-    function submitToOfficial() {
-        const compiler = localStorage.getItem('cf_compiler_id') || '89';
-        const url = `https://codeforces.com/contest/${contestId}/submit?submittedProblemIndex=${problemIndex}&programTypeId=${compiler}`;
-        window.open(url, '_blank');
-    }
-
-    // Copy sample test text
-    function copyText(text, type) {
-        // Resolve escaped newlines back
-        const cleanText = text.replace(/\\n/g, '\n');
-        navigator.clipboard.writeText(cleanText);
-        showToast(`已复制样例${type}到剪贴板！`, 'success');
-    }
-
-    // Format HTML elements to plain text (Markdown representation)
-    function cleanHtmlToText(html) {
-        if (!html) return '';
-        let text = html;
-        // Clean loading badges if any
-        text = text.replace(/<div style=['"]background:\s*#(eff6ff|fee2e2|fef08a)[^>]*>([\s\S]*?)<\/div>/i, '');
-        text = text.replace(/<p[^>]*>/gi, '\n');
-        text = text.replace(/<\/p>/gi, '\n');
-        text = text.replace(/<br\s*\/?>/gi, '\n');
-        text = text.replace(/<li[^>]*>/gi, '\n* ');
-        text = text.replace(/<\/li>/gi, '');
-        text = text.replace(/<ul[^>]*>/gi, '');
-        text = text.replace(/<\/ul>/gi, '\n');
-        text = text.replace(/<pre[^>]*><code[^>]*>/gi, '\n```\n');
-        text = text.replace(/<\/code><\/pre>/gi, '\n```\n');
-        text = text.replace(/<code[^>]*>/gi, '`');
-        text = text.replace(/<\/code>/gi, '`');
-        text = text.replace(/<[^>]+>/g, '');
-
-        const entities = {
-            '&quot;': '"',
-            '&amp;': '&',
-            '&lt;': '<',
-            '&gt;': '>',
-            '&nbsp;': ' ',
-            '&apos;': "'",
-            '&middot;': '·',
-            '&ldquo;': '“',
-            '&rdquo;': '”',
-            '&hellip;': '…'
-        };
-        text = text.replace(/&[a-z0-9#]+;/gi, (match) => entities[match] || match);
-        return text.split('\n').map(line => line.trim()).filter((line, i, arr) => line !== '' || arr[i-1] !== '').join('\n');
-    }
-
-    // Copy complete problem in Markdown formatting for AI chat query
-    function copyForAI(lang) {
-        const title = lang === 'zh' ? '{{ problem.translated_title or problem.title }}' : '{{ problem.title }}';
-        
-        let descHtml = lang === 'zh' ? `{{ problem.translated_description_html|safe }}` : `{{ problem.description_html|safe }}`;
-        descHtml = descHtml.replace(/^<div style=['"]background:\s*#(eff6ff|fee2e2|fef08a)[^>]*>([\s\S]*?)<\/div>/i, '');
-        descHtml = descHtml.replace(/^<div style=['"][^'"]*['"]>\s*.*?(?:智能加速翻译|系统提示|多API回退告警|智能翻译节点).*?<\/div>/i, '');
-
-        const desc = cleanHtmlToText(descHtml);
-        
-        const inputSpecHtml = lang === 'zh' ? `{{ problem.translated_input_spec_html|safe }}` : `{{ problem.input_spec_html|safe }}`;
-        const inputSpec = cleanHtmlToText(inputSpecHtml);
-        
-        const outputSpecHtml = lang === 'zh' ? `{{ problem.translated_output_spec_html|safe }}` : `{{ problem.output_spec_html|safe }}`;
-        const outputSpec = cleanHtmlToText(outputSpecHtml);
-        
-        const noteHtml = lang === 'zh' ? `{{ problem.translated_note_html|safe or problem.note_html|safe }}` : `{{ problem.note_html|safe }}`;
-        const note = cleanHtmlToText(noteHtml);
-
-        let fullMarkdown = lang === 'zh' ? `# 题目: ${title}\n` : `# Problem: ${title}\n`;
-        fullMarkdown += lang === 'zh' 
-            ? `**时间限制**: {{ problem.time_limit }} | **内存限制**: {{ problem.memory_limit }}\n\n`
-            : `**Time Limit**: {{ problem.time_limit }} | **Memory Limit**: {{ problem.memory_limit }}\n\n`;
-        
-        fullMarkdown += lang === 'zh' ? `## 题目描述\n${desc}\n\n` : `## Description\n${desc}\n\n`;
-
-        if (inputSpec) {
-            fullMarkdown += lang === 'zh' ? `## 输入格式说明\n${inputSpec}\n\n` : `## Input\n${inputSpec}\n\n`;
-        }
-        if (outputSpec) {
-            fullMarkdown += lang === 'zh' ? `## 输出格式说明\n${outputSpec}\n\n` : `## Output\n${outputSpec}\n\n`;
-        }
-        
-        const hasNoteSection = {% if has_note %}true{% else %}false{% endif %};
-        if (note && hasNoteSection) {
-            fullMarkdown += lang === 'zh' ? `## 提示与说明\n${note}\n\n` : `## Note\n${note}\n\n`;
-        }
-
-        // Add Samples
-        const samples = [];
-        {% if problem.samples %}
-            {% for sample in problem.samples %}
-            samples.push({
-                input: `{{ sample.input|replace('\n', '\\n')|replace("'", "\\'") }}`,
-                output: `{{ sample.output|replace('\n', '\\n')|replace("'", "\\'") }}`
-            });
-            {% endfor %}
-        {% endif %}
-
-        if (samples.length > 0) {
-            fullMarkdown += lang === 'zh' ? `## 评测样例数据 (Examples)\n` : `## Examples\n`;
-            samples.forEach((sample, idx) => {
-                const cleanInput = sample.input.replace(/\\n/g, '\n');
-                const cleanOutput = sample.output.replace(/\\n/g, '\n');
-                fullMarkdown += `### Example #${idx + 1}\n`;
-                fullMarkdown += `**Input**:\n\`\`\`\n${cleanInput}\n\`\`\`\n`;
-                fullMarkdown += `**Output**:\n\`\`\`\n${cleanOutput}\n\`\`\`\n\n`;
-            });
-        }
-
-        navigator.clipboard.writeText(fullMarkdown.trim());
-        const toastMsg = lang === 'zh' 
-            ? '中文题面（含格式化 Markdown）已一键复制到剪贴板！'
-            : 'Original English problem (formatted Markdown) copied!';
-        showToast(toastMsg, 'success');
-    }
-
-    // Set initial view mode
-    setViewMode('chinese');
+    const PROBLEM_DATA = {
+        translated: {{ (problem.translation_status == 'translated')|tojson }},
+        translationJob: {{ translation_job|tojson }},
+        contestId: {{ problem.contest_id|tojson }},
+        problemIndex: {{ problem.index|tojson }},
+        titleZh: {{ (problem.translated_title or problem.title)|tojson }},
+        titleEn: {{ problem.title|tojson }},
+        descZh: {{ (problem.translated_description_html or "")|tojson }},
+        descEn: {{ (problem.description_html or "")|tojson }},
+        inputSpecZh: {{ (problem.translated_input_spec_html or "")|tojson }},
+        inputSpecEn: {{ (problem.input_spec_html or "")|tojson }},
+        outputSpecZh: {{ (problem.translated_output_spec_html or "")|tojson }},
+        outputSpecEn: {{ (problem.output_spec_html or "")|tojson }},
+        noteZh: {{ (problem.translated_note_html or problem.note_html or "")|tojson }},
+        noteEn: {{ (problem.note_html or "")|tojson }},
+        timeLimit: {{ (problem.time_limit or "")|tojson }},
+        memoryLimit: {{ (problem.memory_limit or "")|tojson }},
+        hasNote: {% if has_note %}true{% else %}false{% endif %},
+        samples: {{ problem.samples|tojson }}
+    };
 </script>
+<script src="{{ url_for('static', filename='js/problem.js') }}"></script>
 {% endblock %}

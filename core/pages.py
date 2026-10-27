@@ -1,11 +1,12 @@
-import json
 import logging
-from flask import Blueprint, render_template, redirect, url_for
 
-from .database import get_flask_db as get_db, SystemConfig, LLMConfig, CachedProblem, ProblemsetLibrary
-from .scraper import scrape_cf_problem
-from .translator import translate_problem
-from .cf_sync import get_user_solved_status_map, get_active_translations
+from flask import Blueprint, redirect, render_template, request, url_for
+
+from .cf_sync import get_user_solved_status_map
+from .content import normalize_problem
+from .database import CachedProblem, LLMConfig, ProblemsetLibrary, SystemConfig
+from .database import get_flask_db as get_db
+from .problem_service import get_translation_job, problem_data
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +31,11 @@ def view_dashboard():
 @pages_bp.route("/cached")
 def view_cached_problems():
     db = get_db()
+    total = db.query(CachedProblem).count()
+    page = min(max(1, request.args.get("page", 1, type=int)), max(1, (total + 49) // 50))
     cached_list = db.query(CachedProblem, ProblemsetLibrary.rating).outerjoin(
         ProblemsetLibrary, CachedProblem.id == ProblemsetLibrary.id
-    ).order_by(CachedProblem.created_at.desc()).all()
+    ).order_by(CachedProblem.created_at.desc()).offset((page - 1) * 50).limit(50).all()
 
     status_map = get_user_solved_status_map(db)
 
@@ -47,121 +50,38 @@ def view_cached_problems():
             "translated_title": p.translated_title,
             "created_at": p.created_at.isoformat() if p.created_at else None,
             "solved_status": status_map.get(prob_key, "NONE"),
-            "rating": rating
+            "rating": rating,
+            "translation_status": p.translation_status
         })
 
-    return render_template("cached.html", active_tab="cached", problems=problems)
+    return render_template("cached.html", active_tab="cached", problems=problems, page=page, total=total)
 
 
 @pages_bp.route("/problem/<int:contest_id>/<string:index>")
 def view_problem_page(contest_id, index):
     db = get_db()
-    index_upper = index.strip().upper()
+    contest_id, index_upper = normalize_problem(contest_id, index)
     problem_id = f"{contest_id}_{index_upper}"
     
     # 1. Check if cached
     cached = db.query(CachedProblem).filter(CachedProblem.id == problem_id).first()
     
-    # 2. If not cached, trigger blocking scrape and translation
     if not cached:
-        logger.info(f"Page request cache miss. Translating on-the-fly: {problem_id}")
-        
-        active_translations, active_translations_lock = get_active_translations()
-        with active_translations_lock:
-            if problem_id not in active_translations:
-                import threading
-                active_translations[problem_id] = threading.Lock()
-            problem_lock = active_translations[problem_id]
-            
-        with problem_lock:
-            # Double check cache inside lock
-            cached = db.query(CachedProblem).filter(CachedProblem.id == problem_id).first()
-            if not cached:
-                try:
-                    scraped_data = scrape_cf_problem(contest_id, index_upper)
-                    translated_data = translate_problem(scraped_data, db)
-                    
-                    is_mock = translated_data.get("is_mock", False)
-                    if not is_mock:
-                        new_cache = CachedProblem(
-                            id=problem_id,
-                            contest_id=contest_id,
-                            index=index_upper,
-                            title=scraped_data["title"],
-                            time_limit=scraped_data["time_limit"],
-                            memory_limit=scraped_data["memory_limit"],
-                            input_file=scraped_data["input_file"],
-                            output_file=scraped_data["output_file"],
-                            description_html=scraped_data["description_html"],
-                            input_spec_html=scraped_data["input_spec_html"],
-                            output_spec_html=scraped_data["output_spec_html"],
-                            samples_json=scraped_data["samples_json"],
-                            note_html=scraped_data["note_html"],
-                            translated_title=translated_data["translated_title"],
-                            translated_description_html=translated_data["translated_description_html"],
-                            translated_input_spec_html=translated_data["translated_input_spec_html"],
-                            translated_output_spec_html=translated_data["translated_output_spec_html"],
-                            translated_note_html=translated_data["translated_note_html"]
-                        )
-                        db.add(new_cache)
-                        db.commit()
-                        cached = new_cache
-                    else:
-                        # Mock translation object (temporary, don't write to DB)
-                        class TempCached:
-                            pass
-                        cached = TempCached()
-                        cached.id = problem_id
-                        cached.contest_id = contest_id
-                        cached.index = index_upper
-                        cached.title = scraped_data["title"]
-                        cached.time_limit = scraped_data["time_limit"]
-                        cached.memory_limit = scraped_data["memory_limit"]
-                        cached.input_file = scraped_data["input_file"]
-                        cached.output_file = scraped_data["output_file"]
-                        cached.description_html = scraped_data["description_html"]
-                        cached.input_spec_html = scraped_data["input_spec_html"]
-                        cached.output_spec_html = scraped_data["output_spec_html"]
-                        cached.samples_json = scraped_data["samples_json"]
-                        cached.note_html = scraped_data["note_html"]
-                        cached.translated_title = translated_data["translated_title"]
-                        cached.translated_description_html = translated_data["translated_description_html"]
-                        cached.translated_input_spec_html = translated_data["translated_input_spec_html"]
-                        cached.translated_output_spec_html = translated_data["translated_output_spec_html"]
-                        cached.translated_note_html = translated_data["translated_note_html"]
-                except Exception as e:
-                    logger.error(f"Failed to fetch/translate for page request: {str(e)}")
-                    # Redirect back to problemset on critical failure
-                    return redirect(url_for("pages.view_problemset"))
-                finally:
-                    with active_translations_lock:
-                        if active_translations.get(problem_id) is problem_lock:
-                            active_translations.pop(problem_id, None)
+        logger.info(f"Page request cache miss. Rendering async loading page: {problem_id}")
+        return render_template(
+            "problem_loading.html",
+            active_tab="problem",
+            contest_id=contest_id,
+            index=index_upper
+        )
 
     # Convert cached object to dictionary structures for template
-    prob_data = {
-        "contest_id": cached.contest_id,
-        "index": cached.index,
-        "title": cached.title,
-        "time_limit": cached.time_limit,
-        "memory_limit": cached.memory_limit,
-        "input_file": cached.input_file,
-        "output_file": cached.output_file,
-        "description_html": cached.description_html,
-        "input_spec_html": cached.input_spec_html,
-        "output_spec_html": cached.output_spec_html,
-        "samples": json.loads(cached.samples_json) if cached.samples_json else [],
-        "note_html": cached.note_html,
-        "translated_title": cached.translated_title,
-        "translated_description_html": cached.translated_description_html,
-        "translated_input_spec_html": cached.translated_input_spec_html,
-        "translated_output_spec_html": cached.translated_output_spec_html,
-        "translated_note_html": cached.translated_note_html
-    }
+    prob_data = problem_data(cached)
 
     has_note = bool(prob_data["note_html"] or (prob_data["translated_note_html"]))
 
-    return render_template("problem.html", active_tab="problem", problem=prob_data, has_note=has_note)
+    return render_template("problem.html", active_tab="problem", problem=prob_data, has_note=has_note,
+                           translation_job=get_translation_job(problem_id))
 
 
 @pages_bp.route("/settings")
@@ -187,7 +107,8 @@ def view_settings_page():
     # User config
     user_config = {
         "cf_handle": system_config.cf_handle or "",
-        "cf_cookies_configured": bool(system_config.cf_cookies and system_config.cf_cookies.strip() not in ("", "your_cookies_here")),
+        "cf_cookies_configured": False,
+        "batch_cooldown": system_config.batch_cooldown if system_config.batch_cooldown is not None else 60
     }
 
     # Cache Stats

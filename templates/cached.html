@@ -9,7 +9,7 @@
         <div>
             <h1 class="page-title">本地已译题目</h1>
             <p class="page-subtitle">
-                您翻译并缓存的全部双语题面都在这里（当前共 <span id="cached-count">{{ problems|length }}</span> 道），支持离线极速秒开阅读。
+                已保存的中文译文和英文原题都在这里（当前共 <span id="cached-count">{{ total }}</span> 道），支持离线极速秒开阅读。
             </p>
         </div>
         
@@ -30,7 +30,7 @@
 
     {% if problems|length == 0 %}
     <!-- Empty State -->
-    <div id="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 32px; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; boxShadow: var(--shadow-premium); text-align: center; gap: 16px;">
+    <div id="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 32px; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: var(--shadow-premium); text-align: center; gap: 16px;">
         <i data-lucide="inbox" style="width: 48px; height: 48px; color: var(--text-muted); stroke-width: 1.5;"></i>
         <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary);">暂无本地已译题目历史</h3>
         <p style="color: var(--text-secondary); font-size: 14.5px; max-width: 500px; line-height: 1.6; margin: 0 auto 8px auto;">
@@ -42,7 +42,7 @@
     </div>
     {% else %}
     <!-- Table List -->
-    <div id="table-container" style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; boxShadow: var(--shadow-premium); overflow: hidden;">
+    <div id="table-container" style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: var(--shadow-premium); overflow: hidden;">
         <table style="width: 100%; border-collapse: collapse; text-align: left;">
             <thead>
                 <tr style="border-bottom: 1px solid var(--border-color); background-color: var(--bg-main);">
@@ -70,8 +70,7 @@
             <tbody>
                 {% for p in problems %}
                 <tr id="row-{{ p.contest_id }}-{{ p.index }}"
-                    onclick="window.location.href='/problem/{{ p.contest_id }}/{{ p.index }}'"
-                    style="border-bottom: 1px solid var(--border-color); cursor: pointer; transition: all var(--transition-fast);"
+                    style="border-bottom: 1px solid var(--border-color); transition: all var(--transition-fast);"
                     class="cached-row">
                     <!-- Checkbox Cell -->
                     <td style="padding: 18px 24px; text-align: center;" onclick="event.stopPropagation()">
@@ -94,14 +93,17 @@
 
                     <!-- Problem Title -->
                     <td style="padding: 18px 24px;">
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <span style="font-size: 14.5px; font-weight: 700; color: var(--text-primary);">
-                                {{ p.translated_title or p.title }}
-                            </span>
-                            <span style="font-size: 12.5px; color: var(--text-secondary);">
-                                {{ p.title }}
-                            </span>
-                        </div>
+                        <a href="/problem/{{ p.contest_id }}/{{ p.index }}" style="text-decoration: none; color: inherit; display: block; outline: none;">
+                            <div style="display: flex; flex-direction: column; gap: 4px; transition: color var(--transition-fast);"
+                                 onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='inherit'">
+                                <span style="font-size: 14.5px; font-weight: 700;">
+                                    {{ p.translated_title or p.title }}{% if p.translation_status != "translated" %} · 仅原文{% endif %}
+                                </span>
+                                <span style="font-size: 12.5px; opacity: 0.8;">
+                                    {{ p.title }}
+                                </span>
+                            </div>
+                        </a>
                     </td>
 
                     <!-- Rating / Difficulty -->
@@ -156,6 +158,11 @@
         </table>
     </div>
     {% endif %}
+    <div class="cache-pagination">
+        {% if page > 1 %}<a href="?page={{ page - 1 }}" class="btn-secondary">上一页</a>{% endif %}
+        <span>第 {{ page }} 页 · 共 {{ total }} 题</span>
+        {% if page * 50 < total %}<a href="?page={{ page + 1 }}" class="btn-secondary">下一页</a>{% endif %}
+    </div>
 </div>
 {% endblock %}
 

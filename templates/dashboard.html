@@ -25,7 +25,7 @@
                     type="text"
                     id="contest-search"
                     placeholder="搜索比赛名称或 ID..."
-                    style="width: 100%; padding: 8px 12px 8px 36px; font-size: 14px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); backgroundColor: var(--bg-sidebar); outline: none; color: var(--text-primary); transition: border-color var(--transition-fast);"
+                    style="width: 100%; padding: 8px 12px 8px 36px; font-size: 14px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background-color: var(--bg-sidebar); outline: none; color: var(--text-primary); transition: border-color var(--transition-fast);"
                 />
             </div>
 
@@ -102,6 +102,7 @@
     let selectedDiv = 'all';
     let currentPage = 1;
     const itemsPerPage = 15;
+    let contestRequest = null;
 
     // Load contests from API
     async function loadContests() {
@@ -113,8 +114,10 @@
                 const recent = data.recent || [];
                 allContests = [...upcoming, ...recent];
                 renderDashboard();
+                if (data.fallback) showToast('CF 暂时不可达，当前展示上次缓存的比赛列表', 'error');
             } else {
-                showToast('拉取 Codeforces 比赛列表失败', 'error');
+                const error = await response.json().catch(() => ({}));
+                document.getElementById('contest-list-container').innerHTML = `<p style="padding:32px">${escapeHtml(error.detail || '比赛列表加载失败')} <button class="btn-secondary" onclick="loadContests()">重试</button></p>`;
             }
         } catch (error) {
             console.error(error);
@@ -199,7 +202,7 @@
             const timeStr = c.startTimeSeconds ? `<span>开始时间: ${formatTime(c.startTimeSeconds)}</span>` : '';
 
             html += `
-                <div class="contest-card" onclick="handleContestClick(${c.id}, '${c.phase}', '${escapeHtml(c.name)}')" style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="contest-card" data-contest-id="${c.id}" style="display: flex; justify-content: space-between; align-items: center;">
                     <div class="contest-info">
                         <span class="contest-name">${escapeHtml(c.name)}</span>
                         <div class="contest-meta">
@@ -215,6 +218,12 @@
             `;
         });
         container.innerHTML = html;
+        container.querySelectorAll('[data-contest-id]').forEach(card => {
+            card.addEventListener('click', () => {
+                const contest = allContests.find(c => c.id === Number(card.dataset.contestId));
+                if (contest) handleContestClick(contest.id, contest.phase, contest.name);
+            });
+        });
 
         // Render pagination
         renderPagination(totalPages);
@@ -289,11 +298,15 @@
     }
 
     function closeContestModal() {
+        if (contestRequest) { contestRequest.abort(); contestRequest = null; }
         document.getElementById('contest-modal-overlay').style.display = 'none';
     }
 
     // Load contest problems
     async function loadContestProblems(contestId) {
+        if (contestRequest) contestRequest.abort();
+        const currentRequest = new AbortController();
+        contestRequest = currentRequest;
         const body = document.getElementById('modal-problems-body');
         body.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; gap: 16px;">
@@ -301,12 +314,14 @@
                 <span style="font-size: 14px; color: var(--text-secondary);">正在同步该比赛的题目列表，请稍候...</span>
             </div>
         `;
-        lucide.createIcons();
+        window.lucide?.createIcons?.();
 
         try {
-            const response = await fetch(`/api/contest/${contestId}/problems`);
+            const response = await fetch(`/api/contest/${contestId}/problems`, { signal: currentRequest.signal });
+            if (currentRequest !== contestRequest) return;
             if (response.ok) {
                 const data = await response.json();
+                if (currentRequest !== contestRequest) return;
                 const problems = data.problems || [];
                 if (problems.length === 0) {
                     body.innerHTML = `<div style="text-align: center; padding: 40px 0; color: var(--text-muted);">未获取到该比赛的题目列表</div>`;
@@ -360,12 +375,13 @@
                 });
                 html += '</div>';
                 body.innerHTML = html;
-                lucide.createIcons();
+                window.lucide?.createIcons?.();
             } else {
                 showToast('获取比赛题目列表失败，请稍后重试', 'error');
                 closeContestModal();
             }
         } catch (error) {
+            if (error.name === 'AbortError' || currentRequest !== contestRequest) return;
             console.error(error);
             showToast('网络错误，无法连接本地服务器', 'error');
             closeContestModal();

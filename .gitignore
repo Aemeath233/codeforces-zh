@@ -1,41 +1,70 @@
-# Windows / macOS / Linux System files
+# Python environments, bytecode and packaging output
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.Python
+*.egg-info/
+.eggs/
+/build/
+/dist/
+
+# Test and analysis caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.cache/
+
+# Local configuration and credentials; keep sanitized examples trackable
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# SQLite data, transaction files and backups (may contain API keys)
+*.db
+*.db-*
+*.db.bak
+*.db.*.bak
+*.sqlite
+*.sqlite-*
+*.sqlite.bak
+*.sqlite3
+*.sqlite3-*
+*.sqlite3.bak
+
+# Runtime state, logs and local data directories
+*.log
+*.log.*
+*.pid
+*.pid.*
+/data/
+/backups/
+/tmp/
+/temp/
+/scratch/
+/flaresolverr_bin/
+
+# Optional Node tooling; the application has no frontend build step
+node_modules/
+.npm/
+.eslintcache
+
+# IDE and operating-system files
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
 Desktop.ini
-
-# Python environment
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Node / Frontend build
-node_modules/
-dist/
-build/
-.npm
-.eslintcache
-
-# Local Databases and Configs
-cf_mirror.db
-backend_app.log
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# IDEs
-.vscode/
-.idea/
 *.suo
-*.ntvs*
-*.njsproj
-*.sln
 *.swp
+*.swo
+*~

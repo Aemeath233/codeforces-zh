@@ -1,7 +1,14 @@
 [project]
 name = "cf"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.2.0"
+description = "本地 Codeforces 中文题面与练习助手"
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = []
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=3.1.3,<4",
+    "beautifulsoup4>=4.15,<5",
+    "sqlalchemy>=2.0.35,<3",
+    "requests>=2.34.2,<3",
+    "bleach>=6.4,<7",
+    "waitress>=3.0.2,<4",
+]

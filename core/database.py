@@ -1,18 +1,33 @@
-import os
 import datetime
-import json
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, Index, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+import os
+import sqlite3
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Index,
+    Integer,
+    String,
+    Text,
+    create_engine,
+    event,
+    inspect,
+    text,
+)
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from .paths import get_data_path
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    pass
 
 # In source mode this stays at CF/cf_mirror.db. In a frozen desktop
 # build it moves to a writable user data directory so the database persists.
 db_path = str(get_data_path("cf_mirror.db"))
-DATABASE_URL = f"sqlite:///{db_path.replace('\\', '/')}"
+db_url_path = db_path.replace("\\", "/")
+DATABASE_URL = f"sqlite:///{db_url_path}"
 
 
 class SystemConfig(Base):
@@ -38,6 +53,8 @@ class SystemConfig(Base):
     ))
     cf_handle = Column(String(100), nullable=True)  # User's Codeforces Username / Handle
     cf_cookies = Column(Text, nullable=True)        # Raw Codeforces Cookie string
+    batch_cooldown = Column(Integer, nullable=True, default=60)
+    problemset_updated_at = Column(DateTime, nullable=True)
 
 class LLMConfig(Base):
     __tablename__ = "llm_config"
@@ -63,6 +80,11 @@ class ProblemsetLibrary(Base):
         Index('idx_contest_index', 'contest_id', 'index'),
     )
 
+class ProblemTag(Base):
+    __tablename__ = "problem_tag"
+    problem_id = Column(String(50), primary_key=True, index=True)
+    tag = Column(String(100), primary_key=True, index=True)
+
 class CachedProblem(Base):
     __tablename__ = "cached_problem"
     id = Column(String(50), primary_key=True)
@@ -87,31 +109,64 @@ class CachedProblem(Base):
     translated_input_spec_html = Column(Text)
     translated_output_spec_html = Column(Text)
     translated_note_html = Column(Text)
+    translation_status = Column(String(20), nullable=False, default="original")
     
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None), index=True)
 
 class ContestCache(Base):
     __tablename__ = "contest_cache"
     id = Column(Integer, primary_key=True, default=1)
     data_json = Column(Text, nullable=False)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None))
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+
+class UserStatusCache(Base):
+    __tablename__ = "user_status_cache"
+    handle = Column(String(100), primary_key=True)
+    status_json = Column(Text, nullable=False)
+    updated_at = Column(DateTime, nullable=False)
+
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False, "timeout": 30}, pool_pre_ping=True)
+
+
+@event.listens_for(engine, "connect")
+def configure_sqlite(connection, _):
+    connection.execute("PRAGMA journal_mode=WAL")
+    connection.execute("PRAGMA busy_timeout=30000")
+
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
+    if os.path.exists(db_path):
+        backup_path = db_path + ".before-v02.db.bak"
+        inspector = inspect(engine)
+        if inspector.has_table("cached_problem") and not os.path.exists(backup_path):
+            columns = {c["name"] for c in inspector.get_columns("cached_problem")}
+            if "translation_status" not in columns:
+                with sqlite3.connect(db_path) as source, sqlite3.connect(backup_path) as backup:
+                    source.backup(backup)
     Base.metadata.create_all(bind=engine)
     
-    # Safely migrate existing tables by adding missing columns if they do not exist
+    # Inspect first: do not hide unrelated migration or database errors.
     with engine.begin() as conn:
-        try:
-            conn.execute(text("ALTER TABLE system_config ADD COLUMN cf_handle VARCHAR(100);"))
-        except Exception:
-            pass  # Already exists
-        try:
-            conn.execute(text("ALTER TABLE system_config ADD COLUMN cf_cookies TEXT;"))
-        except Exception:
-            pass  # Already exists
+        migrations = {
+            "system_config": {"cf_handle": "VARCHAR(100)", "batch_cooldown": "INTEGER DEFAULT 60",
+                              "cf_cookies": "TEXT", "problemset_updated_at": "DATETIME"},
+            "cached_problem": {"translation_status": "VARCHAR(20) NOT NULL DEFAULT 'translated'"},
+        }
+        for table, columns in migrations.items():
+            existing = {c["name"] for c in inspect(conn).get_columns(table)}
+            for name, definition in columns.items():
+                if name not in existing:
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {name} {definition}'))
+        # Preserve original statements while retiring misleading legacy mock translations.
+        conn.execute(text("""UPDATE cached_problem SET translation_status='original',
+            translated_title=NULL, translated_description_html=NULL, translated_input_spec_html=NULL,
+            translated_output_spec_html=NULL, translated_note_html=NULL
+            WHERE translated_description_html IS NULL OR translated_description_html = ''
+            OR instr(translated_description_html, '(模拟描述)') > 0
+            OR instr(translated_description_html, '模拟翻译模式') > 0"""))
             
     db = SessionLocal()
     try:
@@ -140,18 +195,40 @@ def init_db():
         with engine.begin() as conn:
             conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cached_problem_created_at ON cached_problem (created_at DESC);"))
             conn.execute(text('CREATE INDEX IF NOT EXISTS idx_problemset_library_contest_index ON problemset_library (contest_id DESC, "index" ASC);'))
+            # Create FTS5 virtual table for problem names
+            conn.execute(text("CREATE VIRTUAL TABLE IF NOT EXISTS problem_fts USING fts5(problem_id UNINDEXED, name);"))
     finally:
         db.close()
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# get_db() generator removed — was FastAPI legacy, unused in Flask.
 
 def get_flask_db():
     from flask import g
     if 'db' not in g:
         g.db = SessionLocal()
     return g.db
+
+
+def create_cached_problem(problem_id, contest_id, index, scraped_data, translated_data):
+    """Factory function for constructing a CachedProblem from scraped + translated dicts."""
+    return CachedProblem(
+        id=problem_id,
+        contest_id=contest_id,
+        index=index,
+        title=scraped_data["title"],
+        time_limit=scraped_data["time_limit"],
+        memory_limit=scraped_data["memory_limit"],
+        input_file=scraped_data["input_file"],
+        output_file=scraped_data["output_file"],
+        description_html=scraped_data["description_html"],
+        input_spec_html=scraped_data["input_spec_html"],
+        output_spec_html=scraped_data["output_spec_html"],
+        samples_json=scraped_data["samples_json"],
+        note_html=scraped_data["note_html"],
+        translated_title=translated_data.get("translated_title"),
+        translated_description_html=translated_data.get("translated_description_html"),
+        translated_input_spec_html=translated_data.get("translated_input_spec_html"),
+        translated_output_spec_html=translated_data.get("translated_output_spec_html"),
+        translated_note_html=translated_data.get("translated_note_html"),
+        translation_status="translated" if translated_data else "original"
+    )

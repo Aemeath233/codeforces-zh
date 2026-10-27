@@ -1,6 +1,45 @@
 // Core client-side JavaScript for CF Mirror Single-Page Interactivity
+const cfStorage = {
+    getItem(key) { try { return localStorage.getItem(key); } catch { return null; } },
+    setItem(key, value) { try { localStorage.setItem(key, value); return true; } catch { return false; } },
+    removeItem(key) { try { localStorage.removeItem(key); } catch {} }
+};
+
+async function requestTranslation(contestId, index, payload = {}) {
+    const response = await fetch(`/api/problem/${contestId}/${encodeURIComponent(index)}/translate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || '无法启动翻译');
+    return data;
+}
+
+async function monitorTranslation(contestId, index, onUpdate) {
+    let failures = 0;
+    while (true) {
+        try {
+            const response = await fetch(`/api/problem/${contestId}/${encodeURIComponent(index)}/status`);
+            if (!response.ok) throw new Error('读取翻译状态失败');
+            const data = await response.json();
+            failures = 0;
+            if (onUpdate(data) === false) return data;
+            if (data.phase === 'failed') throw new Error(data.detail || '翻译失败，请重试');
+            if (data.phase === 'complete') return data;
+            if (data.phase === 'idle') throw new Error('翻译任务已中断，请重新点击翻译');
+        } catch (error) {
+            if (++failures >= 3 || !['TypeError', 'SyntaxError'].includes(error.name)) throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+}
 
 // 1. Toast Notification Manager
+function refreshLucideIcons() {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
+}
+
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -9,10 +48,10 @@ function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.id = `toast-${id}`;
-    
+
     // Choose icon based on type
     const iconName = type === 'success' ? 'check-circle-2' : 'alert-circle';
-    
+
     toast.innerHTML = `
         <i data-lucide="${iconName}" style="width: 18px; height: 18px;"></i>
         <span>${escapeHtml(message)}</span>
@@ -20,9 +59,9 @@ function showToast(message, type = 'success') {
             <i data-lucide="x" style="width: 14px; height: 14px;"></i>
         </button>
     `;
-    
+
     container.appendChild(toast);
-    lucide.createIcons();
+    refreshLucideIcons();
 
     // Automatically remove after 3.5 seconds
     setTimeout(() => {
@@ -44,24 +83,26 @@ function removeToast(id) {
 let acSyncStatus = null;
 let syncPollerId = null;
 
+let checkingAc = false;
 async function checkAcStatus() {
+    if (checkingAc || document.hidden) return;
+    checkingAc = true;
     try {
         const response = await fetch('/api/user/status-sync');
         if (response.ok) {
             const data = await response.json();
             acSyncStatus = data;
             renderAcStatusBar();
-            
+
             // If on settings tab status view, update the detailed stats
             if (typeof loadStatusTabDetails === 'function') {
-                loadStatusTabDetails();
+                loadStatusTabDetails(data);
             }
 
             // If it's currently syncing in the background, poll every 2.5 seconds
             if (data.syncing) {
-                if (!syncPollerId) {
-                    syncPollerId = setInterval(pollAcSyncStatus, 2500);
-                }
+                if (syncPollerId) clearInterval(syncPollerId);
+                syncPollerId = setInterval(pollAcSyncStatus, 2500);
             } else if (syncPollerId) {
                 clearInterval(syncPollerId);
                 syncPollerId = null;
@@ -71,37 +112,44 @@ async function checkAcStatus() {
         }
     } catch (e) {
         console.error('Failed to fetch AC status sync info:', e);
-    }
+    } finally { checkingAc = false; }
 }
 
+let pollingAc = false;
 async function pollAcSyncStatus() {
+    if (pollingAc || document.hidden) return;
+    pollingAc = true;
     try {
         const response = await fetch('/api/user/status-sync');
         if (response.ok) {
             const data = await response.json();
             acSyncStatus = data;
             renderAcStatusBar();
-            
+
             if (typeof loadStatusTabDetails === 'function') {
-                loadStatusTabDetails();
+                loadStatusTabDetails(data);
             }
 
             if (!data.syncing) {
                 clearInterval(syncPollerId);
                 syncPollerId = null;
                 showSyncOutcomeToast(data);
-                
+
                 // If we are on the problemset or cached pages, reload to show new solve statuses
                 if (window.location.pathname === '/problemset' || window.location.pathname === '/cached' || window.location.pathname === '/dashboard') {
                     setTimeout(() => {
-                        window.location.reload();
+                        if (typeof loadProblems === 'function') {
+                            loadProblems();
+                        } else {
+                            window.location.reload();
+                        }
                     }, 1000);
                 }
             }
         }
     } catch (e) {
         console.error(e);
-    }
+    } finally { pollingAc = false; }
 }
 
 function showSyncOutcomeToast(data) {
@@ -117,15 +165,14 @@ function showSyncOutcomeToast(data) {
 async function triggerAcStatusSync() {
     if (acSyncStatus && acSyncStatus.syncing) return;
     showToast('正在后台向 Codeforces 同步您的做题数据，请稍候...', 'success');
-    
+
     try {
         const response = await fetch('/api/user/status-sync', { method: 'POST' });
         if (response.ok) {
             if (acSyncStatus) acSyncStatus.syncing = true;
             renderAcStatusBar();
-            if (!syncPollerId) {
-                syncPollerId = setInterval(pollAcSyncStatus, 2500);
-            }
+            if (syncPollerId) clearInterval(syncPollerId);
+            syncPollerId = setInterval(pollAcSyncStatus, 2500);
         } else {
             const err = await response.json();
             showToast(err.detail || '启动状态同步失败', 'error');
@@ -146,10 +193,10 @@ function renderAcStatusBar() {
     }
 
     bar.style.display = 'flex';
-    
+
     // Clear styles
     bar.style.transition = 'all var(--transition-fast)';
-    
+
     if (acSyncStatus.syncing) {
         bar.style.backgroundColor = 'var(--warning-bg, rgba(245, 158, 11, 0.08))';
         bar.style.color = 'var(--warning, #f59e0b)';
@@ -166,7 +213,7 @@ function renderAcStatusBar() {
         bar.style.color = '#ef4444';
         bar.style.border = '1px solid rgba(239, 68, 68, 0.15)';
         bar.title = `同步失败: ${acSyncStatus.last_error}。点击可重试同步。`;
-        bar.onclick = triggerAcStatusSync;
+        bar.onclick = event => { event.preventDefault(); triggerAcStatusSync(); };
         bar.style.cursor = 'pointer';
         bar.innerHTML = `
             <span style="display: inline-block; width: 6px; height: 6px; background-color: #ef4444; border-radius: 50%;"></span>
@@ -176,10 +223,10 @@ function renderAcStatusBar() {
         bar.style.backgroundColor = 'var(--success-bg, rgba(16, 185, 129, 0.08))';
         bar.style.color = 'var(--success, #10b981)';
         bar.style.border = '1px solid rgba(16, 185, 129, 0.15)';
-        
+
         const syncTime = acSyncStatus.last_fetched > 0 ? new Date(acSyncStatus.last_fetched * 1000).toLocaleTimeString() : '无';
         bar.title = `最近同步时间: ${syncTime}。点击可重新同步。`;
-        bar.onclick = triggerAcStatusSync;
+        bar.onclick = event => { event.preventDefault(); triggerAcStatusSync(); };
         bar.style.cursor = 'pointer';
         bar.innerHTML = `
             <span style="display: inline-block; width: 6px; height: 6px; background-color: var(--success, #10b981); border-radius: 50%;"></span>
@@ -190,158 +237,128 @@ function renderAcStatusBar() {
 
 
 // 3. Batch Translation Queue Logic
-let batchQueue = {
-    isActive: false,
-    total: 0,
-    currentIndex: 0,
-    currentProblemId: null,
-    statusText: '',
-    timerCountdown: 0
-};
-let cancelBatchFlag = false;
+let batchPollerId = null;
+
+let checkingBatch = false;
+async function checkBatchQueueStatus() {
+    if (checkingBatch || document.hidden) return;
+    checkingBatch = true;
+    try {
+        const response = await fetch('/api/batch-translate/status');
+        if (response.ok) {
+            const data = await response.json();
+            updateBatchStatusUI(data);
+            if (typeof reconcileProblemTranslation === 'function') reconcileProblemTranslation();
+
+            // If active, ensure poller is running
+            if (data.is_active) {
+                if (batchPollerId) clearInterval(batchPollerId);
+                batchPollerId = setInterval(checkBatchQueueStatus, 1500);
+            } else {
+                if (batchPollerId) {
+                    clearInterval(batchPollerId);
+                    batchPollerId = null;
+
+                    // If it just finished, reload list if on problemset page
+                    if (window.location.pathname === '/problemset') {
+                        setTimeout(() => {
+                            if (typeof loadProblems === 'function') {
+                                loadProblems();
+                            } else {
+                                window.location.reload();
+                            }
+                        }, 1500);
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Failed to fetch batch queue status:', e);
+    } finally { checkingBatch = false; }
+}
 
 async function triggerBatchTranslation(selectedProblemsList) {
-    if (batchQueue.isActive) return;
+    const problemsPayload = selectedProblemsList.map(p => ({
+        contest_id: parseInt(p.contest_id, 10),
+        index: p.index
+    }));
 
-    cancelBatchFlag = false;
-    batchQueue = {
-        isActive: true,
-        total: selectedProblemsList.length,
-        currentIndex: 0,
-        currentProblemId: null,
-        statusText: '正在准备批量翻译...',
-        timerCountdown: 0
-    };
-    
-    updateBatchStatusUI();
-    showToast(`已启动批量翻译队列，共 ${selectedProblemsList.length} 道题目...`, 'success');
+    try {
+        const response = await fetch('/api/batch-translate/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ problems: problemsPayload })
+        });
 
-    let mockCount = 0;
-    let failedCount = 0;
-    let cachedOrTranslatedCount = 0;
-
-    for (let i = 0; i < selectedProblemsList.length; i++) {
-        if (cancelBatchFlag) break;
-
-        const p = selectedProblemsList[i];
-        batchQueue.currentIndex = i + 1;
-        batchQueue.currentProblemId = p.id;
-        batchQueue.statusText = `正在抓取并翻译第 ${i + 1}/${selectedProblemsList.length} 道题: ${p.contest_id}${p.index}...`;
-        updateBatchStatusUI();
-
-        let isCached = p.is_cached || false;
-
-        if (isCached) {
-            cachedOrTranslatedCount++;
-            batchQueue.statusText = `已检测到本地缓存：自动跳过并加速下一题 ${p.contest_id}${p.index}...`;
-            updateBatchStatusUI();
-            await new Promise(resolve => setTimeout(resolve, 150));
+        if (response.ok) {
+            const res = await response.json();
+            showToast(res.message || '后台批量翻译任务已成功提交！', 'success');
+            // Immediately start polling status
+            checkBatchQueueStatus();
+            return true;
         } else {
-            try {
-                // Request problem translation from backend API
-                const response = await fetch(`/api/problem/${p.contest_id}/${p.index}`);
-                if (!response.ok) {
-                    throw new Error('翻译接口异常');
-                }
-                const data = await response.json();
-                
-                if (data.source === 'cache') {
-                    isCached = true;
-                    cachedOrTranslatedCount++;
-                } else if (data.source === 'mock') {
-                    mockCount++;
-                } else {
-                    cachedOrTranslatedCount++;
-                }
-            } catch (err) {
-                console.error(err);
-                failedCount++;
-                showToast(`题目 ${p.contest_id}${p.index} 预翻译失败，已跳过。`, 'error');
-            }
+            const err = await response.json();
+            showToast(err.detail || '启动批量翻译失败', 'error');
+            return false;
         }
-
-        // Cool down for 60 seconds if it wasn't cached and not the last problem
-        if (i < selectedProblemsList.length - 1 && !cancelBatchFlag) {
-            if (isCached) continue; // Skip cooldown delay for cached items!
-
-            let secondsLeft = 60;
-            batchQueue.currentProblemId = null;
-            batchQueue.statusText = `第 ${i + 1}/${selectedProblemsList.length} 道已成功预热！安全防风控冷却中...`;
-            batchQueue.timerCountdown = secondsLeft;
-            updateBatchStatusUI();
-
-            const intervalId = setInterval(() => {
-                secondsLeft--;
-                batchQueue.timerCountdown = Math.max(0, secondsLeft);
-                if (secondsLeft <= 0 || cancelBatchFlag) {
-                    clearInterval(intervalId);
-                }
-                updateBatchStatusUI();
-            }, 1000);
-
-            // Wait 60s
-            for (let s = 0; s < 60; s++) {
-                if (cancelBatchFlag) {
-                    clearInterval(intervalId);
-                    break;
-                }
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-            clearInterval(intervalId);
-        }
-    }
-
-    // Done
-    batchQueue.isActive = false;
-    updateBatchStatusUI();
-
-    if (!cancelBatchFlag) {
-        if (mockCount > 0 || failedCount > 0) {
-            showToast(
-                `批量预热完成：${cachedOrTranslatedCount} 道已缓存/翻译，${mockCount} 道为模拟翻译，${failedCount} 道失败。`,
-                'error'
-            );
-        } else {
-            showToast(`批量预翻译任务已全部圆满完成，已选题目已被本地离线缓存。`, 'success');
-        }
-        
-        // Reload list to update local badges
-        if (window.location.pathname === '/problemset') {
-            setTimeout(() => { window.location.reload(); }, 1500);
-        }
-    } else {
-        showToast('批量翻译任务已手动取消。', 'error');
+    } catch (e) {
+        console.error(e);
+        showToast('网络错误，启动批量翻译失败', 'error');
+        return false;
     }
 }
 
-function cancelBatch() {
-    cancelBatchFlag = true;
-    batchQueue.statusText = '正在终止任务并清理队列...';
-    batchQueue.timerCountdown = 0;
-    updateBatchStatusUI();
+async function cancelBatch() {
+    try {
+        const response = await fetch('/api/batch-translate/cancel', { method: 'POST' });
+        if (response.ok) {
+            showToast('已向后台发送取消指令，队列正在终止...', 'success');
+            checkBatchQueueStatus();
+        } else {
+            const err = await response.json();
+            showToast(err.detail || '取消翻译任务失败', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showToast('网络错误，取消翻译任务失败', 'error');
+    }
 }
 
-function updateBatchStatusUI() {
+function updateBatchStatusUI(data) {
     const wrapper = document.getElementById('batch-queue-status');
+    if (typeof renderSettingsBatchQueue === 'function') renderSettingsBatchQueue(data);
     if (!wrapper) return;
 
-    if (!batchQueue.isActive) {
+    if (!data || !data.is_active) {
         wrapper.style.display = 'none';
         return;
     }
 
     wrapper.style.display = 'flex';
-    document.getElementById('batch-progress-text').innerText = `预热进度: ${batchQueue.currentIndex}/${batchQueue.total}`;
-    
+
+    const processed = data.completed + data.failed;
+    const currentIndex = Math.min(processed + 1, data.total);
+
+    document.getElementById('batch-progress-text').innerText = `已完成: ${processed}/${data.total}`;
+
     const countdown = document.getElementById('batch-countdown-text');
-    if (batchQueue.timerCountdown > 0) {
+    if (data.timer_countdown > 0) {
         countdown.style.display = 'inline-block';
-        countdown.innerText = `${batchQueue.timerCountdown}s`;
+        countdown.innerText = `${data.timer_countdown}s`;
     } else {
         countdown.style.display = 'none';
     }
-    
-    wrapper.title = batchQueue.statusText;
+
+    let statusText = `正在抓取并翻译第 ${currentIndex}/${data.total} 道题`;
+    if (data.current_problem) {
+        statusText += `: ${data.current_problem}`;
+    }
+    if (data.timer_countdown > 0) {
+        statusText += ` (防风控冷却中: ${data.timer_countdown}s)`;
+    }
+    wrapper.title = statusText;
+
+
 }
 
 document.getElementById('batch-cancel-btn').addEventListener('click', (e) => {
@@ -352,8 +369,8 @@ document.getElementById('batch-cancel-btn').addEventListener('click', (e) => {
 
 // Helper to escape HTML strings
 function escapeHtml(str) {
-    if (!str) return '';
-    return str
+    if (str === null || str === undefined) return '';
+    return String(str)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -362,8 +379,24 @@ function escapeHtml(str) {
 }
 
 // 4. Initial Setup
+let mainPollerId = null;
+
 window.addEventListener('DOMContentLoaded', () => {
     // Check solved status sync
     checkAcStatus();
-    setInterval(checkAcStatus, 30000); // Poll silently every 30 seconds
+    if (mainPollerId) clearInterval(mainPollerId);
+    mainPollerId = setInterval(() => { checkAcStatus(); checkBatchQueueStatus(); }, 30000);
+
+    // Check batch queue status
+    checkBatchQueueStatus();
+
+
 });
+
+window.addEventListener('beforeunload', () => {
+    if (mainPollerId) clearInterval(mainPollerId);
+    if (syncPollerId) clearInterval(syncPollerId);
+    if (batchPollerId) clearInterval(batchPollerId);
+});
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { checkAcStatus(); checkBatchQueueStatus(); } });
