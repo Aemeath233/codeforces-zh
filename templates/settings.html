@@ -1,14 +1,14 @@
 {% extends 'base.html' %}
 
-{% block title %}管理后台 (设置) - CF 中文镜像站{% endblock %}
+{% block title %}设置 · CF 中文练习助手{% endblock %}
 
 {% block content %}
 <div style="display: flex; flex-direction: column; gap: 24px;">
 
     <!-- Page Header -->
     <div class="page-header" style="margin-bottom: 8px;">
-        <h1 class="page-title">管理后台 (控制与配置)</h1>
-        <p class="page-subtitle">配置您的大模型 API、Codeforces 凭证并查看运行状态，开启极速离线做题体验。</p>
+        <h1 class="page-title">设置</h1>
+        <p class="page-subtitle">管理翻译模型、CF 账号和同步记录。</p>
     </div>
 
     <!-- Settings Tabs Navigation -->
@@ -19,15 +19,15 @@
         </div>
         <div class="settings-tab" id="tab-btn-account" onclick="switchSettingsTab('account')">
             <i data-lucide="user"></i>
-            <span>账户与提交</span>
+            <span>账号与提交</span>
         </div>
         <div class="settings-tab" id="tab-btn-api" onclick="switchSettingsTab('api')">
             <i data-lucide="cpu"></i>
-            <span>API 节点</span>
+            <span>翻译模型</span>
         </div>
         <div class="settings-tab" id="tab-btn-prompt" onclick="switchSettingsTab('prompt')">
             <i data-lucide="code-2"></i>
-            <span>系统提示词</span>
+            <span>翻译要求</span>
         </div>
     </div>
 
@@ -37,18 +37,18 @@
         <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium); display: flex; flex-direction: column; gap: 20px;">
             <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0; display: flex; align-items: center; gap: 8px;">
                 <i data-lucide="activity" style="color: var(--primary); width: 20px; height: 20px;"></i>
-                做题状态同步指示
+                做题记录
             </h2>
             <div id="status-sync-details-card" style="border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; background-color: var(--bg-hover); display: flex; flex-direction: column; gap: 16px;">
                 <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-secondary);">
                     <div class="spinner" style="width: 16px; height: 16px; border-width: 2px; margin: 0;"></div>
-                    <span>正在获取状态同步细节...</span>
+                    <span>正在加载…</span>
                 </div>
             </div>
             <div style="display: flex; flex-wrap: wrap; gap: 16px;">
                 <button onclick="triggerAcStatusSync()" id="status-sync-now-btn" class="search-button" style="display: flex; align-items: center; gap: 6px; padding: 10px 20px;">
                     <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
-                    立即刷新同步
+                    同步记录
                 </button>
             </div>
         </div>
@@ -57,18 +57,18 @@
         <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium); display: flex; flex-direction: column; gap: 20px;">
             <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0; display: flex; align-items: center; gap: 8px;">
                 <i data-lucide="database" style="color: var(--primary); width: 20px; height: 20px;"></i>
-                数据存储与离线缓存状态
+                本地数据
             </h2>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <div style="border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 8px; background-color: var(--bg-hover);">
-                    <span style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">官方题库同步总数</span>
+                    <span style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">题库收录</span>
                     <strong style="font-size: 24px; color: var(--text-primary);">{{ total_library }} 题</strong>
-                    <span style="font-size: 12px; color: var(--text-muted);">本地缓存的 Codeforces 官方全量题目目录。</span>
+                    <span style="font-size: 12px; color: var(--text-muted);">已同步的题目目录。</span>
                 </div>
                 <div style="border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 8px; background-color: var(--bg-hover);">
-                    <span style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">已翻译离线缓存题目</span>
+                    <span style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">已保存题目</span>
                     <strong style="font-size: 24px; color: var(--primary);">{{ total_cached }} 题</strong>
-                    <span style="font-size: 12px; color: var(--text-muted);">已完成大模型智能翻译并存储在本地的高速离线数据。</span>
+                    <span style="font-size: 12px; color: var(--text-muted);">包含英文原题和已生成的译文。</span>
                 </div>
             </div>
         </div>
@@ -77,12 +77,12 @@
         <div id="batch-queue-card" style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium); display: flex; flex-direction: column; gap: 20px;">
             <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0; display: flex; align-items: center; gap: 8px;">
                 <i data-lucide="zap" style="color: var(--primary); width: 20px; height: 20px;"></i>
-                批量翻译队列状态
+                翻译任务
             </h2>
             <div id="batch-queue-details" style="border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; background-color: var(--bg-hover); display: flex; flex-direction: column; gap: 16px;">
                 <div style="font-size: 14px; color: var(--text-secondary); display: flex; align-items: center; gap: 10px;">
                     <div class="spinner" style="width: 16px; height: 16px; border-width: 2px; margin: 0;"></div>
-                    <span>正在加载后台队列状态...</span>
+                    <span>正在加载…</span>
                 </div>
             </div>
         </div>
@@ -91,7 +91,7 @@
         <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium); display: flex; flex-direction: column; gap: 20px;">
             <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0; display: flex; align-items: center; gap: 8px;">
                 <i data-lucide="file-text" style="color: var(--primary); width: 20px; height: 20px;"></i>
-                系统运行日志 (System Logs)
+                运行日志
             </h2>
             <div style="position: relative;">
                 <textarea id="system-logs-textarea" readonly style="width: 100%; height: 260px; font-family: var(--font-mono); font-size: 12px; background-color: var(--bg-hover); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; color: var(--text-primary); resize: vertical; line-height: 1.5; white-space: pre; overflow-x: auto; box-sizing: border-box;"></textarea>
@@ -115,7 +115,7 @@
         <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium);">
             <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
                 <i data-lucide="user" style="color: var(--primary); width: 20px; height: 20px;"></i>
-                Codeforces 账户导入与登录凭证设置 (用于同步做题/AC状态)
+                Codeforces 账号
             </h2>
 
             <form id="cf-auth-form" onsubmit="saveUserAuth(event)" style="display: flex; flex-direction: column; gap: 20px;">
@@ -132,13 +132,13 @@
                             value="{{ user_config.cf_handle or '' }}"
                         />
                         <span style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: inline-block;">
-                            仅用于从 Codeforces 同步并标记您的已通过（AC）题目状态。
+                            用于同步公开做题记录，无需密码。
                         </span>
                     </div>
 
                     <div class="form-group" style="max-width: 400px;">
                         <label class="form-label" for="cfCompiler">
-                            默认提交编译器 (Compiler)
+                            默认提交语言
                         </label>
                         <select
                             id="cfCompiler"
@@ -157,13 +157,13 @@
                             <option value="55">JavaScript</option>
                         </select>
                         <span style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: inline-block;">
-                            用于在题目详情页中点击“前往提交”时预选并自动带入官网页面。
+                            打开 CF 提交页时预选此语言。
                         </span>
                     </div>
 
                     <div class="form-group" style="max-width: 400px;">
                         <label class="form-label" for="batchCooldown">
-                            批量翻译冷却时间 (秒) *
+                            批量翻译间隔（秒）
                         </label>
                         <input
                             id="batchCooldown"
@@ -175,7 +175,7 @@
                             required
                         />
                         <span style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: inline-block;">
-                            批量翻译时每翻译完一题，等待多少秒再翻译下一题，以防被 API 服务商或 Codeforces 封禁。
+                            连续处理题目时，两次请求之间的等待时间。
                         </span>
                     </div>
 
@@ -194,18 +194,18 @@
         <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                 <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0;">
-                    智能翻译大模型节点链 (API Fallback Chain)
+                    翻译模型
                 </h2>
                 <button class="search-button" onclick="openAddForm()" style="display: flex; align-items: center; gap: 6px; padding: 10px 18px;">
                     <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
-                    添加 API 节点
+                    添加模型
                 </button>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 16px;">
                 {% if llm_configs|length == 0 %}
                 <div style="padding: 40px; text-align: center; color: var(--text-muted); border: 1px dashed var(--border-color); border-radius: 10px;">
-                    当前暂未配置任何大模型 API 节点。请点击右上角按钮添加。
+                    还没有配置模型，添加后即可翻译题目。
                 </div>
                 {% else %}
                     {% for node in llm_configs %}
@@ -262,7 +262,7 @@
         <!-- Global prompt tuner -->
         <form onsubmit="savePrompt(event)" class="settings-form">
             <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0;">
-                算法题翻译系统提示词 (System Prompt)
+                翻译要求
             </h2>
             <div class="form-group">
                 <textarea
@@ -272,12 +272,12 @@
                     required
                 >{{ system_prompt }}</textarea>
                 <span style="font-size: 12px; color: var(--text-secondary);">
-                    此系统提示词规定了所有 API 节点的大模型在翻译题目时的指令，强制其**绝对保留 LaTeX 数学公式和 HTML 标签**，确保排版完美。
+                    可补充术语偏好或翻译风格，应用于所有模型。
                 </span>
             </div>
             <button type="submit" id="save-prompt-btn" class="search-button" style="display: flex; align-items: center; gap: 8px; padding: 10px 18px; width: fit-content;">
                 <i data-lucide="save" style="width: 16px; height: 16px;"></i>
-                保存系统提示词
+                保存翻译要求
             </button>
         </form>
     </div>
@@ -288,14 +288,14 @@
     <div id="node-modal-overlay" class="modal-overlay" style="display: none; z-index: 1000;">
         <form id="node-form" onsubmit="saveNode(event)" class="settings-form" style="border: 2px solid var(--primary); max-width: 600px; width: 90%; background: var(--bg-card); position: relative;">
             <h3 class="panel-title" id="modal-title" style="border: none; padding: 0;">
-                添加全新大模型 API 节点
+                添加模型
             </h3>
 
             <input type="hidden" id="formNodeId" />
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                 <div class="form-group">
-                    <label class="form-label">节点名称</label>
+                    <label class="form-label">名称</label>
                     <input
                         type="text"
                         id="formName"
@@ -324,13 +324,13 @@
                     type="password"
                     id="formApiKey"
                     class="form-input"
-                    placeholder="请输入该节点的 API Key (sk-...)"
+                    placeholder="输入 API Key"
                 />
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                 <div class="form-group">
-                    <label class="form-label">API Base URL</label>
+                    <label class="form-label">接口地址</label>
                     <input
                         type="text"
                         id="formBaseUrl"
@@ -341,7 +341,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">模型名称 (Model Name)</label>
+                    <label class="form-label">模型名称</label>
                     <input
                         type="text"
                         id="formModel"
@@ -354,7 +354,7 @@
 
             <div style="display: flex; gap: 12px; margin-top: 8px;">
                 <button type="submit" id="save-node-btn" class="search-button">
-                    确认并保存节点
+                    保存模型
                 </button>
                 <button type="button" class="btn-secondary" onclick="closeModal()" style="padding: 12px 20px;">
                     取消

@@ -99,7 +99,7 @@ async function syncLibrary() {
     if (btn) btn.disabled = true;
     if (icon) icon.classList.add('spinner');
     if (text) text.innerText = '正在同步...';
-    showToast('正在从 Codeforces 同步全量官方题库，请稍候...', 'success');
+    showToast('正在更新题库…', 'success');
 
     try {
         const response = await fetch('/api/problems/sync', { method: 'POST' });
@@ -110,16 +110,16 @@ async function syncLibrary() {
             saveState();
             loadProblems();
         } else {
-            showToast('同步官方题库失败，请检查网络或稍后重试', 'error');
+            showToast('更新题库失败，请检查网络或稍后重试', 'error');
         }
     } catch (e) {
         console.error(e);
-        showToast('同步错误，请确认本地后端服务开启', 'error');
+        showToast('更新失败，请确认本地服务正在运行', 'error');
     } finally {
         isSyncing = false;
         if (btn) btn.disabled = false;
         if (icon) icon.classList.remove('spinner');
-        if (text) text.innerText = '同步官方题库';
+        if (text) text.innerText = '更新题库';
     }
 }
 
@@ -212,7 +212,7 @@ function renderTable() {
         tbody.innerHTML = `
             <tr>
                 <td colspan="6" style="padding: 60px 0; text-align: center; color: var(--text-muted);">
-                    没有找到符合筛选条件的题目。请尝试清空筛选条件或重新同步官方题库。
+                    没有找到符合筛选条件的题目。请尝试清空筛选条件或重新更新题库。
                 </td>
             </tr>
         `;
@@ -292,7 +292,7 @@ function renderTable() {
                 <td style="padding: 16px;">
                     <div style="display: inline-flex; align-items: center; gap: 4px; color: var(--text-secondary); font-size: 13px;">
                         <i data-lucide="check-square" style="width:13px; height: 13px; color: var(--success);"></i>
-                        <span>${p.solved_count.toLocaleString()} solves</span>
+                        <span>${p.solved_count.toLocaleString()} 人通过</span>
                     </div>
                 </td>
                 <td style="padding: 16px;">

@@ -386,4 +386,4 @@ def api_delete_problems():
 
 @api_bp.route("/api/problem/submit", methods=["POST"])
 def api_submit_solution():
-    return jsonify({"detail": "请使用「复制代码并前往 CF」，在官网手动提交。"}), 410
+    return jsonify({"detail": "请前往 CF 官网提交。"}), 410

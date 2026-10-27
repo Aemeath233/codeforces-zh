@@ -79,7 +79,7 @@ async function loadStatusTabDetails(existingData = null) {
                     statusHtml = `
                         <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--warning);">
                             <div class="spinner" style="width: 14px; height: 14px; border-width: 2px; border-top-color: var(--warning); animation-duration: 0.8s; margin: 0;"></div>
-                            <span>后台同步任务正在进行中 (Syncing...)</span>
+                            <span>正在同步…</span>
                         </div>
                     `;
                 } else if (data.last_error) {
@@ -93,7 +93,7 @@ async function loadStatusTabDetails(existingData = null) {
                     statusHtml = `
                         <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--success);">
                             <span style="width: 8px; height: 8px; background-color: var(--success); border-radius: 50%;"></span>
-                            <span>同步状态健康 (Connected)</span>
+                            <span>已同步</span>
                         </div>
                     `;
                 }
@@ -106,7 +106,7 @@ async function loadStatusTabDetails(existingData = null) {
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <div>
                                     <div style="font-weight: 700; font-size: 16px; color: var(--text-primary);">${escapeHtml(data.handle)}</div>
-                                    <div style="font-size: 12px; color: var(--text-secondary);">已绑定的 Codeforces 账号</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary);">Codeforces 账号</div>
                                 </div>
                             </div>
                             ${statusHtml}
@@ -122,7 +122,7 @@ async function loadStatusTabDetails(existingData = null) {
                                 <strong style="font-size: 20px; color: var(--warning);">${data.failed_count || 0} 题</strong>
                             </div>
                             <div style="background-color: var(--bg-card); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">同步总条数</div>
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">有记录的题目</div>
                                 <strong style="font-size: 20px; color: var(--text-primary);">${data.record_count || 0} 条</strong>
                             </div>
                         </div>
@@ -136,12 +136,12 @@ async function loadStatusTabDetails(existingData = null) {
             } else {
                 card.innerHTML = `
                     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center;">
-                        <div style="font-weight: 700; color: var(--text-primary);">您尚未绑定 Codeforces 账号</div>
+                        <div style="font-weight: 700; color: var(--text-primary);">尚未填写 CF 用户名</div>
                         <p style="font-size: 13px; color: var(--text-secondary); max-width: 450px;">
-                            绑定 Codeforces 账号后，本地系统可以自动拉取您的 AC 记录并在题库中高亮标记。
+                            填写 CF 用户名，即可在题库查看做题状态。
                         </p>
                         <button onclick="switchSettingsTab('account')" class="btn-secondary" style="padding: 8px 16px; margin-top: 4px;">
-                            立即前往导入账号
+                            设置账号
                         </button>
                     </div>
                 `;
@@ -170,7 +170,7 @@ function renderSettingsBatchQueue(data) {
         detailsDiv.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--text-secondary); font-size: 14px; min-height: 80px;">
                 <i data-lucide="info" style="width: 18px; height: 18px; color: var(--text-muted);"></i>
-                <span>${data && data.total ? `上次任务：成功 ${data.completed} 题，失败 ${data.failed} 题${data.cancel_flag ? "（已取消）" : ""}` : "当前没有批量翻译任务"}</span>${data && data.errors && data.errors.length ? `<p>${data.errors.map(escapeHtml).join("<br>")}</p>` : ""}
+                <span>${data && data.total ? `上次任务：成功 ${data.completed} 题，失败 ${data.failed} 题${data.cancel_flag ? "（已取消）" : ""}` : "暂无翻译任务"}</span>${data && data.errors && data.errors.length ? `<p>${data.errors.map(escapeHtml).join("<br>")}</p>` : ""}
             </div>
         `;
         if (typeof lucide !== 'undefined' && lucide.createIcons) {
@@ -188,14 +188,14 @@ function renderSettingsBatchQueue(data) {
         statusBadge = `
             <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--warning);">
                 <div class="spinner" style="width: 14px; height: 14px; border-width: 2px; border-top-color: var(--warning); animation-duration: 0.8s; margin: 0;"></div>
-                <span>冷却等待中 (${data.timer_countdown}s)</span>
+                <span>等待下一题 (${data.timer_countdown}s)</span>
             </div>
         `;
     } else {
         statusBadge = `
             <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--primary);">
                 <div class="spinner" style="width: 14px; height: 14px; border-width: 2px; border-top-color: var(--primary); animation-duration: 0.8s; margin: 0;"></div>
-                <span>正在抓取并翻译...</span>
+                <span>正在翻译…</span>
             </div>
         `;
     }
@@ -289,10 +289,10 @@ async function saveUserAuth(e) {
         });
         if (response.ok) {
             if (handle) {
-                showToast('设置保存成功！做题状态同步功能已激活。', 'success');
+                showToast('设置已保存', 'success');
                 triggerAcStatusSync();
             } else {
-                showToast('设置已保存。未填写 Handle，将跳过做题状态同步。', 'success');
+                showToast('设置已保存', 'success');
                 checkAcStatus();
             }
         } else {
@@ -312,7 +312,7 @@ async function saveUserAuth(e) {
 let editingNodeActive = true;
 function openAddForm() {
     editingNodeActive = true;
-    document.getElementById('modal-title').innerText = '添加全新大模型 API 节点';
+    document.getElementById('modal-title').innerText = '添加模型';
     document.getElementById('formNodeId').value = '';
     document.getElementById('formName').value = '';
     document.getElementById('formApiKey').value = '';
@@ -325,7 +325,7 @@ function openAddForm() {
 
 function openEditForm(node) {
     editingNodeActive = node.is_active;
-    document.getElementById('modal-title').innerText = '修改 API 节点参数';
+    document.getElementById('modal-title').innerText = '编辑模型';
     document.getElementById('formNodeId').value = node.id;
     document.getElementById('formName').value = node.name;
     document.getElementById('formApiKey').value = node.api_key_configured ? '****' : '';
@@ -375,7 +375,7 @@ async function saveNode(e) {
         });
 
         if (response.ok) {
-            showToast(nodeId ? 'API 节点已更新！' : 'API 节点添加成功！', 'success');
+            showToast(nodeId ? '模型已更新' : '模型已添加', 'success');
             closeModal();
             window.location.reload();
         } else {
@@ -386,7 +386,7 @@ async function saveNode(e) {
         console.error(e);
         showToast('网络错误，保存节点失败', 'error');
     } finally {
-        btn.innerText = '确认并保存节点';
+        btn.innerText = '保存模型';
         btn.disabled = false;
     }
 }
@@ -441,7 +441,7 @@ async function testNode(node) {
     resultDiv.style.backgroundColor = 'var(--bg-main)';
     resultDiv.style.color = 'var(--text-primary)';
     resultDiv.style.border = '1px solid var(--border-color)';
-    resultDiv.innerHTML = `<div class="spinner" style="width: 16px; height: 16px; border-width: 2px; margin: 0;"></div><span>正在发送轻量级 token 测试连接...</span>`;
+    resultDiv.innerHTML = `<div class="spinner" style="width: 16px; height: 16px; border-width: 2px; margin: 0;"></div><span>正在测试连接…</span>`;
 
     showToast(`正在向 ${node.name} 发送测试连接...`, 'success');
 
@@ -462,13 +462,13 @@ async function testNode(node) {
             resultDiv.style.backgroundColor = 'var(--success-bg)';
             resultDiv.style.color = 'var(--success)';
             resultDiv.style.border = '1px solid rgba(22, 101, 52, 0.2)';
-            resultDiv.innerHTML = `<i data-lucide="check-circle-2" style="width:16px; height:16px;"></i><span>连接成功！大模型响应内容: <b>“${escapeHtml(data.reply)}”</b> (连通性完美)</span>`;
-            showToast(`测试成功！大模型已成功响应。`, 'success');
+            resultDiv.innerHTML = `<i data-lucide="check-circle-2" style="width:16px; height:16px;"></i><span>连接成功： <b>“${escapeHtml(data.reply)}”</b></span>`;
+            showToast(`连接成功`, 'success');
         } else {
             resultDiv.style.backgroundColor = 'var(--danger-bg)';
             resultDiv.style.color = 'var(--danger)';
             resultDiv.style.border = '1px solid rgba(153, 27, 27, 0.2)';
-            resultDiv.innerHTML = `<i data-lucide="alert-circle" style="width:16px; height:16px;"></i><span>连接失败！故障详情: <code>${escapeHtml(data.detail || '接口连接失败，请检查配置')}</code></span>`;
+            resultDiv.innerHTML = `<i data-lucide="alert-circle" style="width:16px; height:16px;"></i><span>连接失败： <code>${escapeHtml(data.detail || '接口连接失败，请检查配置')}</code></span>`;
             showToast(`测试失败：${data.detail || '无法连接'}`, 'error');
         }
         window.lucide?.createIcons?.();
@@ -498,7 +498,7 @@ async function savePrompt(e) {
             body: JSON.stringify({ system_prompt: prompt })
         });
         if (response.ok) {
-            showToast('系统翻译提示词保存成功！', 'success');
+            showToast('翻译要求已保存', 'success');
         } else {
             showToast('系统提示词保存失败', 'error');
         }
@@ -506,7 +506,7 @@ async function savePrompt(e) {
         console.error(e);
         showToast('网络错误，无法保存提示词', 'error');
     } finally {
-        btn.innerHTML = `<i data-lucide="save" style="width:16px; height:16px;"></i>保存系统提示词`;
+        btn.innerHTML = `<i data-lucide="save" style="width:16px; height:16px;"></i>保存翻译要求`;
         btn.disabled = false;
         window.lucide?.createIcons?.();
     }

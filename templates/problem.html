@@ -1,294 +1,102 @@
 {% extends 'base.html' %}
+{% block title %}{{ problem.contest_id }}{{ problem.index }} · {{ problem.translated_title or problem.title }} · CF 中文练习助手{% endblock %}
 
-{% block title %}{{ problem.index }}. {{ problem.translated_title or problem.title }} - CF 中文镜像站{% endblock %}
+{% macro submit_link(style) -%}
+<a class="{{ style }} official-submit-link" data-submit-link href="https://codeforces.com/{{ 'gym' if problem.contest_id >= 100000 else 'contest' }}/{{ problem.contest_id }}/submit?submittedProblemIndex={{ problem.index }}" target="_blank" rel="noopener noreferrer">
+    <span>去 CF 提交</span><i data-lucide="arrow-up-right" aria-hidden="true"></i>
+</a>
+{%- endmacro %}
 
 {% block content %}
 <div class="problem-viewer-container">
-    <!-- 1. Problem Meta Header -->
-    <div class="problem-header-card">
-        <div>
-            <h1 class="page-title" style="font-size: 24px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                <span>{{ problem.index }}. <span id="header-translated-title">{{ problem.translated_title or problem.title }}</span></span>
-                <span style="font-size: 14px; font-weight: normal; color: var(--text-secondary);">
-                    ({{ problem.title }})
-                </span>
-            </h1>
-
+    <header class="problem-header-card">
+        <div class="problem-heading">
+            <span class="problem-code">{{ problem.contest_id }}{{ problem.index }}</span>
+            <h1 class="page-title">{{ problem.translated_title or problem.title }}</h1>
+            {% if problem.translated_title and problem.translated_title != problem.title %}
+            <p class="problem-original-title">{{ problem.title }}</p>
+            {% endif %}
             <div class="problem-meta-list">
-                <div class="problem-meta-item">
-                    <i data-lucide="clock" style="width: 16px; height: 16px;"></i>
-                    <span class="problem-meta-label">单点时限:</span>
-                    <span class="problem-meta-value">{{ problem.time_limit or '未提供' }}</span>
-                </div>
-                <div class="problem-meta-item">
-                    <i data-lucide="cpu" style="width: 16px; height: 16px;"></i>
-                    <span class="problem-meta-label">内存限制:</span>
-                    <span class="problem-meta-value">{{ problem.memory_limit or '未提供' }}</span>
-                </div>
-                <div class="problem-meta-item">
-                    <i data-lucide="file-text" style="width: 16px; height: 16px;"></i>
-                    <span class="problem-meta-label">标准输入/输出:</span>
-                    <span class="problem-meta-value">{{ problem.input_file or '未提供' }} / {{ problem.output_file or '未提供' }}</span>
-                </div>
+                <span class="problem-meta-item"><i data-lucide="clock" aria-hidden="true"></i>{{ problem.time_limit or '—' }}</span>
+                <span class="problem-meta-item"><i data-lucide="cpu" aria-hidden="true"></i>{{ problem.memory_limit or '—' }}</span>
+                {% if problem.input_file not in ['standard input', 'stdin', 'standard', '', none] or problem.output_file not in ['standard output', 'stdout', 'standard', '', none] %}
+                <span class="problem-meta-item"><i data-lucide="files" aria-hidden="true"></i>{{ problem.input_file or '—' }} / {{ problem.output_file or '—' }}</span>
+                {% endif %}
             </div>
         </div>
-
-        <!-- Action controls -->
         <div class="view-actions">
-            <!-- Mode Switchers -->
-            <div style="display: flex; border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;">
-                <button
-                    id="btn-view-bilingual"
-                    {% if problem.translation_status != 'translated' %}disabled{% endif %}
-                    class="btn-secondary"
-                    onclick="setViewMode('bilingual')"
-                    style="border: none; border-radius: 0; padding: 10px 14px;"
-                    title="双语对照模式"
-                >
-                    <i data-lucide="languages" style="width: 16px; height: 16px;"></i>
-                    <span style="font-size: 13px;">双语对照</span>
-                </button>
-                <button
-                    id="btn-view-chinese"
-                    {% if problem.translation_status != 'translated' %}disabled{% endif %}
-                    class="btn-secondary active"
-                    onclick="setViewMode('chinese')"
-                    style="border: none; border-left: 1px solid var(--border-color); border-radius: 0; padding: 10px 14px;"
-                    title="纯中文模式"
-                >
-                    <i data-lucide="book-open" style="width: 16px; height: 16px;"></i>
-                    <span style="font-size: 13px;">中文阅读</span>
-                </button>
-                <button
-                    id="btn-view-english"
-                    class="btn-secondary"
-                    onclick="setViewMode('english')"
-                    style="border: none; border-left: 1px solid var(--border-color); border-radius: 0; padding: 10px 14px;"
-                    title="纯英文原版"
-                >
-                    <i data-lucide="layers" style="width: 16px; height: 16px;"></i>
-                    <span style="font-size: 13px;">英文原版</span>
-                </button>
+            <div class="reading-modes" role="group" aria-label="阅读模式">
+                <button id="btn-view-chinese" onclick="setViewMode('chinese')" aria-pressed="true" {% if problem.translation_status != 'translated' %}disabled{% endif %}>中文</button>
+                <button id="btn-view-bilingual" onclick="setViewMode('bilingual')" aria-pressed="false" {% if problem.translation_status != 'translated' %}disabled{% endif %}>中英对照</button>
+                <button id="btn-view-english" onclick="setViewMode('english')" aria-pressed="false">英文</button>
             </div>
-
-            <!-- Refresh Button -->
-            <button
-                class="btn-secondary"
-                id="force-refresh-btn"
-                onclick="forceRefreshTranslation()"
-                style="padding: 10px 14px;"
-                title="使用已缓存的英文原题重新翻译"
-            >
-                <i data-lucide="refresh-cw" id="refresh-icon" style="width: 16px; height: 16px;"></i>
-                <span style="font-size: 13px;">重新翻译</span>
-            </button>
-
-            <!-- Submit Button (Header) -->
-            <button
-                class="search-button"
-                onclick="submitToOfficial()"
-                style="padding: 10px 14px; display: flex; align-items: center; gap: 6px; text-decoration: none;"
-                title="前往官网提交本题"
-            >
-                <i data-lucide="send" style="width: 16px; height: 16px;"></i>
-                <span style="font-size: 13px;">前往提交</span>
-            </button>
+            <div class="problem-actions">
+                <button class="btn-secondary" id="force-refresh-btn" onclick="forceRefreshTranslation()"><i data-lucide="refresh-cw" aria-hidden="true"></i>重新翻译</button>
+                {{ submit_link('search-button') }}
+            </div>
         </div>
-    </div>
+    </header>
 
     <div id="translation-status" class="translation-notice" {% if problem.translation_status == 'translated' %}hidden{% endif %} role="status" aria-live="polite">
-        <span id="translation-status-text">中文题面尚未生成，当前展示英文原题。请配置翻译模型后点击“重新翻译”。</span>
-        <a href="/settings">翻译设置</a>
+        <span id="translation-status-text">尚未生成中文译文，当前显示英文。</span><a href="/settings">翻译设置</a>
     </div>
 
-    <!-- 2. Reader Body (Bilingual columns) -->
-    <div class="tex2jax_process" style="display: flex; flex-direction: column; gap: 24px;">
-        <div id="problem-columns-split" class="problem-reader-split single-column">
-            
-            <!-- Chinese Content Column -->
-            <div id="chinese-column" class="reader-column" style="position: relative;">
-                <div class="column-header-tab" id="chinese-header-tab" style="display: none; margin-bottom: 8px;">中文智能翻译</div>
-
-                <button onclick="copyForAI('zh')" class="copy-ai-btn" id="copy-zh-btn" style="position: absolute; top: 20px; right: 20px; z-index: 10;" title="一键复制完整中文题面及样例数据">
-                    <i data-lucide="copy" style="width: 13px; height: 13px;"></i>
-                    <span>一键复制问AI</span>
-                </button>
-
-                <div class="problem-html">
-                    <h2 style="font-size: 20px; font-weight: 800; margin-bottom: 16px; color: var(--primary);">
-                        {{ problem.translated_title or problem.title }}
-                    </h2>
-                    <div class="tex2jax_process">
-                        {{ problem.translated_description_html|safe }}
-                    </div>
-
-                    {% if problem.translated_input_spec_html %}
-                    <div class="section-subtitle">输入格式说明</div>
-                    <div class="tex2jax_process">
-                        {{ problem.translated_input_spec_html|safe }}
-                    </div>
-                    {% endif %}
-
-                    {% if problem.translated_output_spec_html %}
-                    <div class="section-subtitle">输出格式说明</div>
-                    <div class="tex2jax_process">
-                        {{ problem.translated_output_spec_html|safe }}
-                    </div>
-                    {% endif %}
-
-                    <!-- Note (hidden if bilingual note is shown at bottom) -->
-                    {% if problem.translated_note_html and not has_note %}
-                    <div class="section-subtitle" id="chinese-note-title">提示与说明</div>
-                    <div class="tex2jax_process" id="chinese-note-body">
-                        {{ problem.translated_note_html|safe }}
-                    </div>
-                    {% endif %}
-                </div>
+    <div id="problem-columns-split" class="problem-reader-split single-column tex2jax_process">
+        {% for lang, column, label, description, input_spec, output_spec in [
+            ('zh', 'chinese', '中文题面', problem.translated_description_html, problem.translated_input_spec_html, problem.translated_output_spec_html),
+            ('en', 'english', 'English', problem.description_html, problem.input_spec_html, problem.output_spec_html)
+        ] %}
+        <article id="{{ column }}-column" class="reader-column" {% if (lang == 'en' and problem.translation_status == 'translated') or (lang == 'zh' and problem.translation_status != 'translated') %}style="display:none"{% endif %}>
+            <div class="reader-toolbar tex2jax_ignore">
+                <h2 class="reader-label">{{ label }}</h2>
+                <button onclick="copyProblem('{{ lang }}')" class="copy-problem-btn" id="copy-{{ lang }}-btn" title="复制题面和样例"><i data-lucide="copy" aria-hidden="true"></i>复制题面</button>
             </div>
-
-            <!-- English Content Column -->
-            <div id="english-column" class="reader-column" style="position: relative; display: none;">
-                <div class="column-header-tab en" id="english-header-tab" style="display: none; margin-bottom: 8px;">Original English</div>
-
-                <button onclick="copyForAI('en')" class="copy-ai-btn" id="copy-en-btn" style="position: absolute; top: 20px; right: 20px; z-index: 10;" title="Copy complete English problem statement and sample data">
-                    <i data-lucide="copy" style="width: 13px; height: 13px;"></i>
-                    <span>Copy for AI</span>
-                </button>
-
-                <div class="problem-html">
-                    <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary);">
-                        {{ problem.title }}
-                    </h2>
-                    <div class="tex2jax_process">
-                        {{ problem.description_html|safe }}
-                    </div>
-
-                    {% if problem.input_spec_html %}
-                    <div class="section-subtitle" style="border-color: var(--text-secondary);">Input</div>
-                    <div class="tex2jax_process">
-                        {{ problem.input_spec_html|safe }}
-                    </div>
-                    {% endif %}
-
-                    {% if problem.output_spec_html %}
-                    <div class="section-subtitle" style="border-color: var(--text-secondary);">Output</div>
-                    <div class="tex2jax_process">
-                        {{ problem.output_spec_html|safe }}
-                    </div>
-                    {% endif %}
-
-                    <!-- Note -->
-                    {% if problem.note_html and not has_note %}
-                    <div class="section-subtitle" style="border-color: var(--text-secondary);" id="english-note-title">Note</div>
-                    <div class="tex2jax_process" id="english-note-body">
-                        {{ problem.note_html|safe }}
-                    </div>
-                    {% endif %}
-                </div>
+            <div class="problem-html">
+                <div>{{ (description or '')|safe }}</div>
+                {% if input_spec %}<h3 class="section-subtitle">{{ '输入' if lang == 'zh' else 'Input' }}</h3><div>{{ input_spec|safe }}</div>{% endif %}
+                {% if output_spec %}<h3 class="section-subtitle">{{ '输出' if lang == 'zh' else 'Output' }}</h3><div>{{ output_spec|safe }}</div>{% endif %}
             </div>
-
-        </div>
-
-        <!-- 3. Sample Tests & Note (Always full width at bottom) -->
-        {% if problem.samples or has_note %}
-        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-premium);">
-            <!-- Samples -->
-            {% if problem.samples %}
-            <div>
-                <h2 class="panel-title" style="font-size: 18px; border-bottom: none; padding-bottom: 0; margin-bottom: 16px;">
-                    评测样例数据 (Examples)
-                </h2>
-                <div class="samples-container">
-                    {% for sample in problem.samples %}
-                    <div class="sample-block">
-                        <div class="sample-header">
-                            <span>样例 #{{ loop.index }}</span>
-                        </div>
-
-                        <!-- Render dynamic sample test block -->
-                        <div class="sample-grid">
-                            <div class="sample-input-cell">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div class="sample-cell-title">输入 (Input)</div>
-                                    <button class="sample-copy-btn" onclick='copyText({{ sample.input|tojson }}, "输入")' >
-                                        <i data-lucide="copy" style="width: 12px; height: 12px;"></i>
-                                        <span>复制输入</span>
-                                    </button>
-                                </div>
-                                <pre class="sample-pre">{% if sample.input_lines %}{% for line in sample.input_lines %}<div class="sample-line {{ line.class }}"{% if line.group is defined and line.group is not none %} data-group="{{ line.group }}"{% endif %}>{{ line.text }}</div>{% endfor %}{% else %}{{ sample.input }}{% endif %}</pre>
-                            </div>
-                            <div class="sample-output-cell">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div class="sample-cell-title">输出 (Output)</div>
-                                    <button class="sample-copy-btn" onclick='copyText({{ sample.output|tojson }}, "输出")' >
-                                        <i data-lucide="copy" style="width: 12px; height: 12px;"></i>
-                                        <span>复制输出</span>
-                                    </button>
-                                </div>
-                                <pre class="sample-pre">{% if sample.output_lines %}{% for line in sample.output_lines %}<div class="sample-line {{ line.class }}"{% if line.group is defined and line.group is not none %} data-group="{{ line.group }}"{% endif %}>{{ line.text }}</div>{% endfor %}{% else %}{{ sample.output }}{% endif %}</pre>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Note section if has_note -->
-            {% if has_note %}
-            <div id="note-bilingual-section" style="margin-top: 32px; border-top: 1px solid var(--border-color); padding-top: 24px;">
-                <h2 class="panel-title" style="font-size: 18px; border: none; padding: 0; margin-bottom: 16px;">
-                    样例说明 / 提示 (Note)
-                </h2>
-                <div class="problem-reader-split" id="note-columns-split">
-                    <!-- Chinese Note -->
-                    <div class="problem-html" id="chinese-note-col">
-                        <div class="tex2jax_process">
-                            {{ problem.translated_note_html|safe or problem.note_html|safe }}
-                        </div>
-                    </div>
-                    <!-- English Note -->
-                    <div class="problem-html" id="english-note-col">
-                        <div class="tex2jax_process">
-                            {{ problem.note_html|safe }}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-        </div>
-        {% endif %}
+        </article>
+        {% endfor %}
     </div>
 
-    <section class="practice-workspace tex2jax_ignore">
-        <div class="workspace-heading">
-            <h2 class="panel-title">代码草稿</h2>
-            <span id="draft-status" role="status" aria-live="polite">草稿按题目保存在当前浏览器</span>
+    {% if problem.samples %}
+    <section class="samples-card">
+        <h2 class="panel-title">样例</h2>
+        <div class="samples-container">
+            {% for sample in problem.samples %}
+            <div class="sample-block">
+                <div class="sample-header">样例 {{ loop.index }}</div>
+                <div class="sample-grid">
+                    <div class="sample-input-cell">
+                        <div class="sample-cell-heading"><span class="sample-cell-title">输入</span><button class="sample-copy-btn" aria-label="复制样例 {{ loop.index }} 输入" onclick='copyText({{ sample.input|tojson }}, "输入")'><i data-lucide="copy" aria-hidden="true"></i>复制</button></div>
+                        <pre class="sample-pre">{% if sample.input_lines %}{% for line in sample.input_lines %}<div class="sample-line {{ line.class }}"{% if line.group is defined and line.group is not none %} data-group="{{ line.group }}"{% endif %}>{{ line.text }}</div>{% endfor %}{% else %}{{ sample.input }}{% endif %}</pre>
+                    </div>
+                    <div class="sample-output-cell">
+                        <div class="sample-cell-heading"><span class="sample-cell-title">输出</span><button class="sample-copy-btn" aria-label="复制样例 {{ loop.index }} 输出" onclick='copyText({{ sample.output|tojson }}, "输出")'><i data-lucide="copy" aria-hidden="true"></i>复制</button></div>
+                        <pre class="sample-pre">{% if sample.output_lines %}{% for line in sample.output_lines %}<div class="sample-line {{ line.class }}"{% if line.group is defined and line.group is not none %} data-group="{{ line.group }}"{% endif %}>{{ line.text }}</div>{% endfor %}{% else %}{{ sample.output }}{% endif %}</pre>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
         </div>
-        <p class="workspace-help">可以在这里写代码，也可以从自己的编辑器粘贴。点击“复制代码并前往 CF”，到官网粘贴代码并手动提交。</p>
-        <div class="workspace-toolbar">
-            <label for="submit-compiler">提交语言</label>
-            <select id="submit-compiler" class="form-input" aria-label="提交语言">
-                <option value="">使用官网记住的语言</option>
-                <option value="91">C++23</option>
-                <option value="89">C++20</option>
-                <option value="54">C++17</option>
-                <option value="31">Python 3</option>
-                <option value="70">PyPy 3</option>
-                <option value="87">Java 21</option>
-                <option value="75">Rust</option>
-            </select>
-            <label class="btn-secondary source-file-label">导入代码文件<input type="file" id="source-file" accept=".cpp,.cc,.c,.h,.py,.java,.rs,.js,.ts,.kt,.go,.txt"></label>
-        </div>
-        <textarea id="code-draft" class="code-draft" rows="18" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="本题代码草稿" placeholder="在这里输入或粘贴代码…"></textarea>
-        <div class="workspace-actions">
-            <button id="copy-submit-btn" class="search-button" onclick="copyCodeAndSubmit()">复制代码并前往 CF</button>
-            <button class="btn-secondary" onclick="submitToOfficial()">只打开提交页</button>
-            <button class="btn-secondary" onclick="downloadDraft()">下载代码</button>
-            <button class="btn-secondary" onclick="refreshProblemStatus()">提交后刷新做题状态</button>
-        </div>
-        <p class="workspace-help">官网需要登录并完成浏览器验证。题号会带入提交页，语言以官网最终显示为准。草稿仅保存在当前浏览器，请及时下载重要代码。</p>
     </section>
+    {% endif %}
+
+    {% if has_note %}
+    <section id="note-bilingual-section" class="note-card tex2jax_process">
+        <h2 class="panel-title">提示</h2>
+        <div class="problem-reader-split" id="note-columns-split">
+            <div class="problem-html" id="chinese-note-col">{{ (problem.translated_note_html or problem.note_html or '')|safe }}</div>
+            <div class="problem-html" id="english-note-col">{{ (problem.note_html or '')|safe }}</div>
+        </div>
+    </section>
+    {% endif %}
+
+    <footer class="problem-footer">
+        <a class="original-problem-link" href="https://codeforces.com/{{ 'gym' if problem.contest_id >= 100000 else 'contest' }}/{{ problem.contest_id }}/problem/{{ problem.index }}" target="_blank" rel="noopener noreferrer">查看原题<i data-lucide="external-link" aria-hidden="true"></i></a>
+        {{ submit_link('search-button') }}
+    </footer>
 </div>
 {% endblock %}
 

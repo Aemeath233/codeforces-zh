@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 
-{% block title %}Codeforces 官方比赛大厅 - CF 中文镜像站{% endblock %}
+{% block title %}Codeforces 官方比赛大厅 · CF 中文练习助手{% endblock %}
 
 {% block content %}
 <div>
     <div class="page-header">
         <h1 class="page-title">Codeforces 官方比赛大厅 (Contests)</h1>
-        <p class="page-subtitle">同步官方实时比赛列表，点击比赛即可浏览并智能翻译全部题目。</p>
+        <p class="page-subtitle">浏览比赛，选择题目开始练习。</p>
     </div>
 
     <!-- Unified Contest List Panel -->
@@ -59,7 +59,7 @@
             <div class="modal-header">
                 <div class="modal-title-wrapper">
                     <span class="modal-title" id="modal-contest-name">加载中...</span>
-                    <span class="modal-subtitle" id="modal-contest-subtitle">比赛 ID: #0000 · 请选择要翻译阅读的题目</span>
+                    <span class="modal-subtitle" id="modal-contest-subtitle">选择题目</span>
                 </div>
                 <button class="modal-close-btn" onclick="closeContestModal()">
                     <i data-lucide="x" style="width: 18px; height: 18px;"></i>
@@ -121,7 +121,7 @@
             }
         } catch (error) {
             console.error(error);
-            showToast('无法连接本地后端，比赛列表加载失败', 'error');
+            showToast('比赛列表加载失败，请稍后重试', 'error');
         }
     }
 
@@ -287,12 +287,12 @@
 
     function handleContestClick(id, phase, name) {
         if (phase === 'BEFORE') {
-            showToast('提示：该比赛尚未开始，Codeforces 官方尚未公开题目列表，请在比赛开始后再来查看哦！', 'error');
+            showToast('比赛尚未开始，题目暂未公开。', 'error');
             return;
         }
         
         document.getElementById('modal-contest-name').innerText = name;
-        document.getElementById('modal-contest-subtitle').innerText = `比赛 ID: #${id} · 请选择要翻译阅读的题目`;
+        document.getElementById('modal-contest-subtitle').innerText = `比赛 ID: #${id} · 选择题目`;
         document.getElementById('contest-modal-overlay').style.display = 'flex';
         loadContestProblems(id);
     }
@@ -311,7 +311,7 @@
         body.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; gap: 16px;">
                 <i data-lucide="refresh-cw" class="spinner" style="color: var(--primary); width: 36px; height: 36px;"></i>
-                <span style="font-size: 14px; color: var(--text-secondary);">正在同步该比赛的题目列表，请稍候...</span>
+                <span style="font-size: 14px; color: var(--text-secondary);">正在加载题目…</span>
             </div>
         `;
         window.lucide?.createIcons?.();
@@ -346,7 +346,7 @@
 
                     const ratingBadge = p.rating 
                         ? `<span class="problem-rating-tag ${ratingClass}">★ ${p.rating}</span>`
-                        : `<span class="problem-rating-tag" style="background-color: var(--border-hover); color: var(--text-secondary);">无评分</span>`;
+                        : `<span class="problem-rating-tag" style="background-color: var(--border-hover); color: var(--text-secondary);">暂无难度</span>`;
 
                     let tagsHtml = '';
                     if (p.tags) {

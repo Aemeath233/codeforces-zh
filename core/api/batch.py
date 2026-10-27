@@ -28,7 +28,7 @@ def _normalize_batch_problems(raw_problems):
         normalized.append({"contest_id": contest_id, "index": index})
 
     if not normalized:
-        raise ValueError("未选中任何有效题目进行预热")
+        raise ValueError("请选择要翻译的题目")
     return normalized
 
 
@@ -44,20 +44,20 @@ def api_batch_translate_start():
     status, count = start_batch_queue(problems, SessionLocal)
 
     if status == "started":
-        return jsonify({"status": "success", "message": f"已成功启动后台批量翻译队列，共 {count} 道题目"})
+        return jsonify({"status": "success", "message": f"已开始翻译 {count} 道题目"})
     elif status == "appended":
-        return jsonify({"status": "success", "message": f"已成功将 {count} 道新题目追加到后台翻译队列"})
+        return jsonify({"status": "success", "message": f"已添加 {count} 道题目"})
     elif status == "cancelling":
-        return jsonify({"detail": "队列正在取消，请结束后重新添加"}), 409
+        return jsonify({"detail": "正在停止翻译，请稍后再添加"}), 409
     else: # no_change
-        return jsonify({"status": "success", "message": "选中的题目已在队列或正在翻译，无需重复添加"})
+        return jsonify({"status": "success", "message": "这些题目已在翻译列表中"})
 
 
 @api_bp.route("/api/batch-translate/cancel", methods=["POST"])
 def api_batch_translate_cancel():
     from core.cf_sync import cancel_batch_queue
     cancel_batch_queue()
-    return jsonify({"status": "success", "message": "已发送取消指令，后台队列正在终止"})
+    return jsonify({"status": "success", "message": "正在停止翻译"})
 
 
 @api_bp.route("/api/batch-translate/status", methods=["GET"])

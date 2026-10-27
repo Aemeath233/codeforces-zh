@@ -52,7 +52,7 @@ def api_system_prompt():
         if system_prompt is not None:
             config.system_prompt = system_prompt.strip()
         db.commit()
-        return jsonify({"status": "success", "message": "系统提示词更新成功"})
+        return jsonify({"status": "success", "message": "翻译要求已保存"})
     else:
         config = db.query(SystemConfig).filter(SystemConfig.id == 1).first()
         if not config:
@@ -85,7 +85,7 @@ def api_llm_configs():
         if config_id:
             config = db.query(LLMConfig).filter(LLMConfig.id == config_id).first()
             if not config:
-                return jsonify({"detail": "LLM 配置未找到"}), 404
+                return jsonify({"detail": "未找到该模型"}), 404
 
             config.name = name
             config.base_url = base_url
@@ -108,7 +108,7 @@ def api_llm_configs():
             db.add(config)
 
         db.commit()
-        return jsonify({"status": "success", "message": "API 节点已保存并更新！"})
+        return jsonify({"status": "success", "message": "模型已保存"})
     else:
         configs = db.query(LLMConfig).order_by(LLMConfig.priority.asc()).all()
         results = []
@@ -131,10 +131,10 @@ def api_delete_llm_config(config_id):
     db = get_db()
     config = db.query(LLMConfig).filter(LLMConfig.id == config_id).first()
     if not config:
-        return jsonify({"detail": "LLM 配置未找到"}), 404
+        return jsonify({"detail": "未找到该模型"}), 404
     db.delete(config)
     db.commit()
-    return jsonify({"status": "success", "message": "API 节点已成功删除！"})
+    return jsonify({"status": "success", "message": "模型已删除"})
 
 
 @api_bp.route("/api/config/test", methods=["POST"])
@@ -164,7 +164,7 @@ def api_test_config():
         reply = test_llm_connection(api_key, base_url, model)
         return jsonify({
             "status": "success",
-            "message": "大模型接口连接测试成功！",
+            "message": "连接成功",
             "reply": reply
         })
     except Exception as e:
@@ -201,7 +201,7 @@ def api_user_config():
         db.commit()
 
         reset_user_status_cache()
-        return jsonify({"status": "success", "message": "账户及设置信息已保存！"})
+        return jsonify({"status": "success", "message": "设置已保存"})
     else:
         get_user_solved_status_map(db)
         config = db.query(SystemConfig).filter(SystemConfig.id == 1).first()

@@ -1,15 +1,15 @@
 {% extends 'base.html' %}
 
-{% block title %}本地已译题目 - CF 中文镜像站{% endblock %}
+{% block title %}本地题目 · CF 中文练习助手{% endblock %}
 
 {% block content %}
 <div style="display: flex; flex-direction: column; gap: 24px;">
     <!-- Page Header -->
     <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;">
         <div>
-            <h1 class="page-title">本地已译题目</h1>
+            <h1 class="page-title">本地题目</h1>
             <p class="page-subtitle">
-                已保存的中文译文和英文原题都在这里（当前共 <span id="cached-count">{{ total }}</span> 道），支持离线极速秒开阅读。
+                已保存 <span id="cached-count">{{ total }}</span> 道题目，可随时继续阅读。
             </p>
         </div>
         
@@ -32,12 +32,12 @@
     <!-- Empty State -->
     <div id="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 32px; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: var(--shadow-premium); text-align: center; gap: 16px;">
         <i data-lucide="inbox" style="width: 48px; height: 48px; color: var(--text-muted); stroke-width: 1.5;"></i>
-        <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary);">暂无本地已译题目历史</h3>
+        <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary);">暂无本地题目历史</h3>
         <p style="color: var(--text-secondary); font-size: 14.5px; max-width: 500px; line-height: 1.6; margin: 0 auto 8px auto;">
-            当您在“仪表盘”或“官方题库列表”中选择并翻译一道新题目后，系统便会自动将其中文翻译和原版题面**完整离线记录**到本地的数据库中，并同步显示在此处！
+            从题库打开一道题，原文和译文会自动保存在这里。
         </p>
         <div style="font-size: 13.5px; color: var(--primary); font-weight: 600; display: flex; align-items: center; gap: 6px;">
-            提示：已译题目在此页面可无网络极速秒开，无需任何 API 额度。
+            阅读已保存的译文无需再次翻译。
         </div>
     </div>
     {% else %}
@@ -51,17 +51,17 @@
                         <input type="checkbox" id="select-all" onclick="toggleSelectAll(this)" style="cursor: pointer; transform: scale(1.15); accent-color: var(--primary);">
                     </th>
                     <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary); width: 120px;">题号</th>
-                    <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary);">中文译名 / 原文名称</th>
+                    <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary);">题目名称</th>
                     <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary); width: 160px;">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <i data-lucide="star" style="width: 14px; height: 14px;"></i>
-                            <span>难度评分</span>
+                            <span>难度</span>
                         </div>
                     </th>
                     <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary); width: 180px;">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <i data-lucide="calendar" style="width: 14px; height: 14px;"></i>
-                            <span>翻译时间</span>
+                            <span>保存时间</span>
                         </div>
                     </th>
                     <th style="padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--text-secondary); width: 180px; text-align: center;">操作</th>

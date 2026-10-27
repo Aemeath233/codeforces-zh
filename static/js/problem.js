@@ -13,7 +13,7 @@ function initProblemView() {
     const savedMode = cfStorage.getItem('cf_reading_mode');
     setViewMode(PROBLEM_DATA.translated ? (['chinese', 'english', 'bilingual'].includes(savedMode) ? savedMode : 'chinese') : 'english', false);
     setupSampleHighlights();
-    initDraft();
+    initSubmissionLinks();
     const job = PROBLEM_DATA.translationJob;
     if (job && ['queued', 'scraping', 'translating'].includes(job.phase)) {
         watchProblemTranslation();
@@ -48,34 +48,13 @@ function setViewMode(mode, persist = true) {
     const split = document.getElementById('problem-columns-split');
     const zhCol = document.getElementById('chinese-column');
     const enCol = document.getElementById('english-column');
-    const zhHeader = document.getElementById('chinese-header-tab');
-    const enHeader = document.getElementById('english-header-tab');
-
-    const copyZh = document.getElementById('copy-zh-btn');
-    const copyEn = document.getElementById('copy-en-btn');
-
     if (split && zhCol && enCol) {
-        if (mode === 'bilingual') {
-            split.classList.remove('single-column');
-            zhCol.style.display = 'block';
-            enCol.style.display = 'block';
-            if (zhHeader) zhHeader.style.display = 'block';
-            if (enHeader) enHeader.style.display = 'block';
-            if (copyZh) copyZh.style.top = '12px';
-            if (copyEn) copyEn.style.top = '12px';
-        } else if (mode === 'chinese') {
-            split.classList.add('single-column');
-            zhCol.style.display = 'block';
-            enCol.style.display = 'none';
-            if (zhHeader) zhHeader.style.display = 'none';
-            if (copyZh) copyZh.style.top = '20px';
-        } else if (mode === 'english') {
-            split.classList.add('single-column');
-            zhCol.style.display = 'none';
-            enCol.style.display = 'block';
-            if (enHeader) enHeader.style.display = 'none';
-            if (copyEn) copyEn.style.top = '20px';
-        }
+        split.classList.toggle('single-column', mode !== 'bilingual');
+        zhCol.style.display = mode === 'english' ? 'none' : 'block';
+        enCol.style.display = mode === 'chinese' ? 'none' : 'block';
+    }
+    for (const name of ['chinese', 'bilingual', 'english']) {
+        document.getElementById(`btn-view-${name}`)?.setAttribute('aria-pressed', String(name === mode));
     }
 
     // Toggle Note layout if it exists
@@ -111,10 +90,6 @@ function translationNotice(message, failed = false) {
 }
 
 function reloadProblem() {
-    if (!saveDraft()) {
-        translationNotice('翻译已完成，草稿尚未保存。请先下载代码备份，再刷新页面。', true);
-        return;
-    }
     try { sessionStorage.setItem('cf_problem_reload_scroll', String(window.scrollY)); } catch {}
     window.location.reload();
 }
@@ -141,7 +116,7 @@ async function watchProblemTranslation() {
     btn.disabled = true;
     try {
         await monitorTranslation(PROBLEM_DATA.contestId, PROBLEM_DATA.problemIndex, data => {
-            const labels = { queued: '等待翻译任务开始…', scraping: '正在获取原题…', translating: '正在生成中文题面，英文原题可以先阅读。' };
+            const labels = { queued: '等待翻译…', scraping: '正在获取原题…', translating: '正在翻译，可以先阅读英文。' };
             if (labels[data.phase]) translationNotice(labels[data.phase]);
         });
         reloadProblem();
@@ -171,7 +146,7 @@ function officialSubmitUrl() {
     const { contestId, problemIndex } = PROBLEM_DATA;
     const section = Number(contestId) >= 100000 ? 'gym' : 'contest';
     const params = new URLSearchParams({ submittedProblemIndex: problemIndex });
-    const compiler = document.getElementById('submit-compiler').value;
+    const compiler = cfStorage.getItem('cf_compiler_id') || '';
     if (compiler) params.set('programTypeId', compiler);
     return `https://codeforces.com/${section}/${contestId}/submit?${params}`;
 }
@@ -180,9 +155,19 @@ function rememberOfficialVisit() {
     cfStorage.setItem('cf_official_visit', String(Date.now()));
 }
 
-function submitToOfficial() {
-    rememberOfficialVisit();
-    window.open(officialSubmitUrl(), '_blank', 'noopener,noreferrer');
+function initSubmissionLinks() {
+    document.querySelectorAll('[data-submit-link]').forEach(link => {
+        link.href = officialSubmitUrl();
+        link.addEventListener('click', rememberOfficialVisit);
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) return;
+        const visit = Number(cfStorage.getItem('cf_official_visit'));
+        if (visit) {
+            cfStorage.removeItem('cf_official_visit');
+            if (Date.now() - visit < 24 * 3600 * 1000) refreshProblemStatus(true);
+        }
+    });
 }
 
 async function copyTextToClipboard(text, successMsg) {
@@ -198,104 +183,10 @@ async function copyTextToClipboard(text, successMsg) {
         let copied = false;
         try { copied = document.execCommand('copy'); } catch {}
         textArea.remove();
-        if (!copied) { showToast('复制失败，请手动选中代码后复制。', 'error'); return false; }
+        if (!copied) { showToast('复制失败，请手动选择内容后复制。', 'error'); return false; }
     }
     if (successMsg) showToast(successMsg, 'success');
     return true;
-}
-
-let draftSaveTimer;
-let draftBaseline = null;
-function draftKey() { return `cf_draft_${PROBLEM_DATA.contestId}_${PROBLEM_DATA.problemIndex}`; }
-function saveDraft() {
-    const code = document.getElementById('code-draft').value;
-    const shared = cfStorage.getItem(draftKey()) || '';
-    if (draftBaseline === null) draftBaseline = shared;
-    if (code === draftBaseline) return true; // An untouched old tab must never overwrite another tab.
-    if (shared !== draftBaseline && shared !== code) {
-        document.getElementById('draft-status').textContent = '其他页面已修改本题草稿，当前内容未覆盖它。请下载当前代码备份';
-        return false;
-    }
-    const saved = cfStorage.setItem(draftKey(), code);
-    if (saved) draftBaseline = code;
-    document.getElementById('draft-status').textContent = saved ? '草稿已保存到当前浏览器' : '草稿保存失败，请下载代码备份';
-    return saved;
-}
-
-function initDraft() {
-    const editor = document.getElementById('code-draft');
-    editor.value = cfStorage.getItem(draftKey()) || '';
-    draftBaseline = editor.value;
-    editor.addEventListener('input', () => {
-        document.getElementById('draft-status').textContent = '正在保存…';
-        clearTimeout(draftSaveTimer);
-        draftSaveTimer = setTimeout(saveDraft, 250);
-    });
-    editor.addEventListener('keydown', event => {
-        if (event.key === 'Tab') {
-            event.preventDefault();
-            editor.setRangeText('    ', editor.selectionStart, editor.selectionEnd, 'end');
-            editor.dispatchEvent(new Event('input'));
-        }
-        if ((event.ctrlKey || event.metaKey) && event.key === 's') { event.preventDefault(); saveDraft(); }
-    });
-    const compiler = document.getElementById('submit-compiler');
-    compiler.value = cfStorage.getItem('cf_compiler_id') || '';
-    compiler.addEventListener('change', () => cfStorage.setItem('cf_compiler_id', compiler.value));
-    document.getElementById('source-file').addEventListener('change', async event => {
-        const file = event.target.files[0];
-        if (!file) return;
-        if (file.size > 1024 * 1024) { showToast('代码文件不能超过 1 MB', 'error'); return; }
-        if (editor.value.trim() && !confirm('导入文件会覆盖当前草稿，是否继续？')) return;
-        try { editor.value = await file.text(); saveDraft(); }
-        catch { showToast('无法读取代码文件', 'error'); }
-        event.target.value = '';
-    });
-    window.addEventListener('beforeunload', event => {
-        if (!saveDraft()) { event.preventDefault(); event.returnValue = ''; }
-    });
-    window.addEventListener('storage', event => {
-        if (event.key !== draftKey()) return;
-        const incoming = event.newValue || '';
-        if (editor.value === draftBaseline || editor.value === incoming) {
-            editor.value = draftBaseline = incoming;
-            document.getElementById('draft-status').textContent = '已同步其他页面保存的草稿';
-        } else {
-            document.getElementById('draft-status').textContent = '其他页面已修改本题草稿，请下载当前代码备份';
-        }
-    });
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) { saveDraft(); return; }
-        const visit = Number(cfStorage.getItem('cf_official_visit'));
-        if (visit) {
-            cfStorage.removeItem('cf_official_visit');
-            if (Date.now() - visit < 24 * 3600 * 1000) refreshProblemStatus(true);
-        }
-    });
-}
-
-async function copyCodeAndSubmit() {
-    const code = document.getElementById('code-draft').value;
-    if (!code.trim()) { showToast('请先输入或粘贴代码', 'error'); return; }
-    saveDraft();
-    const target = window.open('about:blank', '_blank');
-    if (target) target.opener = null;
-    const copied = await copyTextToClipboard(code, '代码已复制，请到 CF 粘贴并手动提交');
-    if (!copied) { if (target) target.close(); return; }
-    if (target) { rememberOfficialVisit(); target.location.replace(officialSubmitUrl()); }
-    else showToast('代码已复制，浏览器拦截了新窗口，请点击“只打开提交页”', 'error');
-}
-
-function downloadDraft() {
-    const code = document.getElementById('code-draft').value;
-    if (!code.trim()) { showToast('草稿为空', 'error'); return; }
-    const ext = { '31': 'py', '70': 'py', '87': 'java', '75': 'rs' }[document.getElementById('submit-compiler').value] || 'cpp';
-    const url = URL.createObjectURL(new Blob([code], { type: 'text/plain;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${PROBLEM_DATA.contestId}${PROBLEM_DATA.problemIndex}.${ext}`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 async function refreshProblemStatus(silent = false) {
@@ -312,7 +203,7 @@ async function refreshProblemStatus(silent = false) {
 
 // Copy sample test text
 function copyText(text, type) {
-    copyTextToClipboard(text, `已复制样例${type}到剪贴板！`);
+    copyTextToClipboard(text, `样例${type}已复制`);
 }
 
 // Format HTML elements to plain text (Markdown representation)
@@ -350,8 +241,8 @@ function cleanHtmlToText(html) {
     return text.split('\n').map(line => line.trim()).filter((line, i, arr) => line !== '' || arr[i-1] !== '').join('\n');
 }
 
-// Copy complete problem in Markdown formatting for AI chat query
-function copyForAI(lang) {
+// Copy the original statement data, before MathJax changes the DOM.
+function copyProblem(lang) {
     if (typeof PROBLEM_DATA === 'undefined') return;
     const {
         titleZh, titleEn,
@@ -409,11 +300,7 @@ function copyForAI(lang) {
         });
     }
 
-    const toastMsg = lang === 'zh'
-        ? '中文题面（含格式化 Markdown）已一键复制到剪贴板！'
-        : 'Original English problem (formatted Markdown) copied!';
-
-    copyTextToClipboard(fullMarkdown.trim(), toastMsg);
+    copyTextToClipboard(fullMarkdown.trim(), '题面已复制');
 }
 
 // Setup interactive test case line highlighting (Codeforces style)

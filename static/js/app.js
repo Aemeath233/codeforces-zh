@@ -156,7 +156,7 @@ function showSyncOutcomeToast(data) {
     if (data.last_error) {
         showToast(`做题状态同步失败: ${data.last_error}`, 'error');
     } else if (data.record_count === 0) {
-        showToast('Codeforces 做题状态同步完成，暂无记录。', 'success');
+        showToast('同步完成，暂无做题记录', 'success');
     } else {
         showToast(`做题状态同步完成！(AC ${data.accepted_count || 0} 题 / 尝试未过 ${data.failed_count || 0} 题 / 共 ${data.record_count || 0} 条记录)`, 'success');
     }
@@ -164,7 +164,7 @@ function showSyncOutcomeToast(data) {
 
 async function triggerAcStatusSync() {
     if (acSyncStatus && acSyncStatus.syncing) return;
-    showToast('正在后台向 Codeforces 同步您的做题数据，请稍候...', 'success');
+    showToast('正在同步做题记录…', 'success');
 
     try {
         const response = await fetch('/api/user/status-sync', { method: 'POST' });
@@ -206,7 +206,7 @@ function renderAcStatusBar() {
         bar.style.cursor = 'default';
         bar.innerHTML = `
             <div class="spinner" style="width: 12px; height: 12px; border-width: 2px; border-top-color: var(--warning, #f59e0b); animation-duration: 0.8s; flex-shrink: 0; margin: 0;"></div>
-            <span>AC 同步中...</span>
+            <span>同步中…</span>
         `;
     } else if (acSyncStatus.last_error) {
         bar.style.backgroundColor = 'rgba(239, 68, 68, 0.08)';
@@ -217,7 +217,7 @@ function renderAcStatusBar() {
         bar.style.cursor = 'pointer';
         bar.innerHTML = `
             <span style="display: inline-block; width: 6px; height: 6px; background-color: #ef4444; border-radius: 50%;"></span>
-            <span>同步失败: ${escapeHtml(acSyncStatus.handle)}</span>
+            <span>同步失败</span>
         `;
     } else {
         bar.style.backgroundColor = 'var(--success-bg, rgba(16, 185, 129, 0.08))';
@@ -230,7 +230,7 @@ function renderAcStatusBar() {
         bar.style.cursor = 'pointer';
         bar.innerHTML = `
             <span style="display: inline-block; width: 6px; height: 6px; background-color: var(--success, #10b981); border-radius: 50%;"></span>
-            <span>做题状态已同步: ${escapeHtml(acSyncStatus.handle)} (AC ${acSyncStatus.accepted_count || 0} / 尝试未过 ${acSyncStatus.failed_count || 0} / 共 ${acSyncStatus.record_count || 0} 条记录)</span>
+            <span>AC ${acSyncStatus.accepted_count || 0}</span>
         `;
     }
 }
@@ -292,7 +292,7 @@ async function triggerBatchTranslation(selectedProblemsList) {
 
         if (response.ok) {
             const res = await response.json();
-            showToast(res.message || '后台批量翻译任务已成功提交！', 'success');
+            showToast(res.message || '已开始翻译', 'success');
             // Immediately start polling status
             checkBatchQueueStatus();
             return true;
@@ -312,7 +312,7 @@ async function cancelBatch() {
     try {
         const response = await fetch('/api/batch-translate/cancel', { method: 'POST' });
         if (response.ok) {
-            showToast('已向后台发送取消指令，队列正在终止...', 'success');
+            showToast('正在停止翻译', 'success');
             checkBatchQueueStatus();
         } else {
             const err = await response.json();
@@ -339,7 +339,7 @@ function updateBatchStatusUI(data) {
     const processed = data.completed + data.failed;
     const currentIndex = Math.min(processed + 1, data.total);
 
-    document.getElementById('batch-progress-text').innerText = `已完成: ${processed}/${data.total}`;
+    document.getElementById('batch-progress-text').innerText = `翻译 ${processed}/${data.total}`;
 
     const countdown = document.getElementById('batch-countdown-text');
     if (data.timer_countdown > 0) {
@@ -349,12 +349,12 @@ function updateBatchStatusUI(data) {
         countdown.style.display = 'none';
     }
 
-    let statusText = `正在抓取并翻译第 ${currentIndex}/${data.total} 道题`;
+    let statusText = `正在翻译第 ${currentIndex}/${data.total} 道题`;
     if (data.current_problem) {
         statusText += `: ${data.current_problem}`;
     }
     if (data.timer_countdown > 0) {
-        statusText += ` (防风控冷却中: ${data.timer_countdown}s)`;
+        statusText += ` (等待下一题： ${data.timer_countdown}s)`;
     }
     wrapper.title = statusText;
 

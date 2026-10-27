@@ -1,14 +1,14 @@
 {% extends 'base.html' %}
 
-{% block title %}官方算法题库列表 - CF 中文镜像站{% endblock %}
+{% block title %}题库 · CF 中文练习助手{% endblock %}
 
 {% block content %}
 <div>
     <!-- Page Header -->
     <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div>
-            <h1 class="page-title">官方算法题库列表</h1>
-            <p class="page-subtitle">浏览 Codeforces 公开题库，按算法、难度精准筛选，一键中文翻译做题。</p>
+            <h1 class="page-title">题库</h1>
+            <p class="page-subtitle">按名称、难度或标签，找一道想做的题。</p>
         </div>
         <button
             class="btn-secondary"
@@ -17,7 +17,7 @@
             style="display: flex; align-items: center; gap: 8px; padding: 10px 16px;"
         >
             <i data-lucide="refresh-cw" id="sync-icon" style="width: 16px; height: 16px;"></i>
-            <span id="sync-btn-text">同步官方题库</span>
+            <span id="sync-btn-text">更新题库</span>
         </button>
     </div>
 
@@ -56,14 +56,14 @@
                 </div>
 
                 <button type="submit" class="search-button">
-                    筛选检索
+                    筛选
                 </button>
             </div>
 
             <!-- Tags list filters -->
             <div style="display: flex; flex-direction: column; gap: 8px;">
                 <span style="font-size: 13px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
-                    <i data-lucide="hash" style="width: 14px; height: 14px;"></i> 算法标签筛选 (Tags)
+                    <i data-lucide="hash" style="width: 14px; height: 14px;"></i> 算法标签
                 </span>
                 <div id="tags-container" style="display: flex; gap: 8px; flex-wrap: wrap; max-height: 72px; overflow-y: auto; padding-right: 4px;">
                     <!-- Tags populated dynamically via JS -->
@@ -98,7 +98,7 @@
                 </button>
                 <button onclick="startBatchTranslation()" class="search-button" style="padding: 6px 16px; font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 8px;" id="batch-submit-btn">
                     <i data-lucide="zap" style="width: 14px; height: 14px;"></i>
-                    <span>批量翻译预热</span>
+                    <span>批量翻译</span>
                 </button>
             </div>
         </div>
@@ -117,16 +117,16 @@
                                 title="选择本页所有题目"
                             />
                         </th>
-                        <th style="padding: 12px 16px; width: 150px;">代码 (Code)</th>
-                        <th style="padding: 12px 16px; width: 35%;">题目名称 (Problem Title)</th>
+                        <th style="padding: 12px 16px; width: 150px;">题号</th>
+                        <th style="padding: 12px 16px; width: 35%;">题目名称</th>
                         <th onclick="handleSortByRating()" style="padding: 12px 16px; width: 130px; cursor: pointer; user-select: none;" class="hover-sortable" title="点击按难度评分排序">
                             <div style="display: flex; align-items: center; gap: 4px;">
-                                <span>难度评分 (Rating)</span>
+                                <span>难度</span>
                                 <span id="sort-indicator" style="opacity: 0.3;">⇅</span>
                             </div>
                         </th>
-                        <th style="padding: 12px 16px; width: 130px;">解出人数 (Solves)</th>
-                        <th style="padding: 12px 16px;">标签 (Tags)</th>
+                        <th style="padding: 12px 16px; width: 130px;">通过人数</th>
+                        <th style="padding: 12px 16px;">标签</th>
                     </tr>
                 </thead>
                 <tbody id="problems-table-body">

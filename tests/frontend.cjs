@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 
 function setup() {
     const elements = new Map();
-    for (const id of ['batch-cancel-btn', 'code-draft', 'draft-status', 'submit-compiler', 'source-file']) {
+    for (const id of ['batch-cancel-btn']) {
         elements.set(id, { value: '', textContent: '', style: {}, addEventListener() {} });
     }
     const storage = new Map();
@@ -35,85 +35,56 @@ function setup() {
     await t.context.copyText('a\\n\nactual newline', '输入');
     assert.equal(t.copies[0], 'a\\n\nactual newline', 'sample copying must not turn literal backslash-n into newline');
 
-    t.elements.get('submit-compiler').value = '89';
+    t.storage.set('cf_compiler_id', '89');
     assert.equal(t.context.officialSubmitUrl(), 'https://codeforces.com/contest/4/submit?submittedProblemIndex=A&programTypeId=89');
     t.context.PROBLEM_DATA.contestId = 600000;
     t.context.PROBLEM_DATA.problemIndex = 'A1';
-    t.elements.get('submit-compiler').value = '';
+    t.storage.delete('cf_compiler_id');
     assert.equal(t.context.officialSubmitUrl(), 'https://codeforces.com/gym/600000/submit?submittedProblemIndex=A1');
 
     t = setup();
-    t.elements.get('code-draft').value = 'int main(){return 0;}';
-    await t.context.copyCodeAndSubmit();
-    assert.equal(t.copies[0], 'int main(){return 0;}');
-    assert.equal(t.navigations.length, 1);
-    assert.equal(t.storage.get('cf_draft_4_A'), 'int main(){return 0;}');
-
-    t = setup();
-    let closed = false;
-    t.context.window.open = () => ({ close() { closed = true; }, location: { replace() { throw Error('must not navigate after copy failed'); } } });
     t.context.navigator.clipboard.writeText = async () => { throw Error('denied'); };
-    t.elements.get('code-draft').value = 'code';
-    await t.context.copyCodeAndSubmit();
-    assert.equal(closed, true);
+    assert.equal(await t.context.copyTextToClipboard('statement'), false);
     assert.equal(t.notices.at(-1).type, 'error');
 
     t = setup();
-    t.context.window.open = () => { throw Error('must not open a window for an empty draft'); };
-    await t.context.copyCodeAndSubmit();
-    assert.equal(t.notices.at(-1).type, 'error');
-
-    t = setup();
-    t.context.window.open = () => null;
-    t.elements.get('code-draft').value = 'code';
-    await t.context.copyCodeAndSubmit();
-    assert.equal(t.copies[0], 'code');
-    assert.match(t.notices.at(-1).message, /拦截/);
-
-    t = setup();
-    t.context.localStorage.setItem = () => { throw Error('Quota exceeded'); };
-    t.elements.get('code-draft').value = 'code';
-    t.context.saveDraft();
-    assert.match(t.elements.get('draft-status').textContent, /保存失败/);
+    t.context.localStorage.getItem = () => { throw Error('Storage disabled'); };
+    assert.equal(t.context.officialSubmitUrl(), 'https://codeforces.com/contest/4/submit?submittedProblemIndex=A');
 
     t = setup();
     t.context.fetch = async () => ({ ok: true, json: async () => ({ phase: 'failed', detail: 'model unavailable' }) });
     await assert.rejects(t.context.monitorTranslation(4, 'A', () => {}), /model unavailable/);
 
     t = setup();
-    t.storage.set('cf_draft_4_A', 'old code');
-    t.context.initDraft();
-    t.storage.set('cf_draft_4_A', 'new code in another tab');
-    t.windowEvents.get('beforeunload')({ preventDefault() { throw Error('clean tab should close freely'); } });
-    assert.equal(t.storage.get('cf_draft_4_A'), 'new code in another tab', 'closing an untouched old tab must not overwrite newer code');
+    const submitEvents = new Map();
+    const link = { addEventListener: (type, fn) => submitEvents.set(type, fn) };
+    t.context.document.querySelectorAll = selector => selector === '[data-submit-link]' ? [link] : [];
+    t.context.initSubmissionLinks();
+    assert.equal(link.href, 'https://codeforces.com/contest/4/submit?submittedProblemIndex=A');
+    submitEvents.get('click')();
+    assert.ok(Number(t.storage.get('cf_official_visit')) > 0);
+    assert.equal(t.copies.length, 0, 'opening CF must not change the clipboard');
 
     t = setup();
-    t.storage.set('cf_draft_4_A', 'old code');
-    t.context.initDraft();
-    t.storage.set('cf_draft_4_A', 'new code');
-    t.windowEvents.get('storage')({ key: 'cf_draft_4_A', newValue: 'new code' });
-    assert.equal(t.elements.get('code-draft').value, 'new code', 'clean tabs should reflect shared draft changes');
-    t.elements.get('code-draft').value = 'my unsaved changes';
-    t.storage.set('cf_draft_4_A', 'other unsaved changes');
-    t.windowEvents.get('storage')({ key: 'cf_draft_4_A', newValue: 'other unsaved changes' });
-    assert.equal(t.context.saveDraft(), false);
-    assert.equal(t.storage.get('cf_draft_4_A'), 'other unsaved changes');
-    assert.equal(t.elements.get('code-draft').value, 'my unsaved changes');
-    let warned = false;
-    t.windowEvents.get('beforeunload')({ preventDefault() { warned = true; } });
-    assert.equal(warned, true, 'a conflicting unsaved draft must not be discarded silently');
-
-    let reloaded = false;
-    t.context.window.location.reload = () => { reloaded = true; };
-    t.context.translationNotice = message => t.notices.push({ message });
+    t.storage.set('cf_draft_4_A', 'existing local code');
+    t.context.initProblemView();
     t.context.reloadProblem();
-    assert.equal(reloaded, false, 'translation completion must not reload over an unsaved conflicting draft');
-    assert.match(t.notices.at(-1).message, /备份/);
+    assert.equal(t.storage.get('cf_draft_4_A'), 'existing local code', 'removing the editor must preserve previously saved local data');
+
+    t = setup();
+    Object.assign(t.context.PROBLEM_DATA, {
+        titleZh: '中文标题', titleEn: 'Title', descZh: '<p>给定 $n$。</p>', descEn: '<p>Given $n$.</p>',
+        inputSpecZh: '', inputSpecEn: '', outputSpecZh: '', outputSpecEn: '', noteZh: '', noteEn: '',
+        timeLimit: '1 second', memoryLimit: '256 MB', hasNote: false, samples: [{input: 'literal\\n\nnext', output:'YES'}]
+    });
+    t.context.copyProblem('zh');
+    assert.match(t.copies[0], /给定 \$n\$/);
+    assert.ok(t.copies[0].includes('literal\\n\nnext'));
 
     t = setup();
     t.context.PROBLEM_DATA.translated = false;
     t.context.fetch = async () => ({ ok: true, json: async () => ({ phase: 'complete', translated: true }) });
-    reloaded = false;
+    let reloaded = false;
     t.context.reloadProblem = () => { reloaded = true; };
     await t.context.reconcileProblemTranslation();
     assert.equal(reloaded, true, 'an original-only page must discover a completed batch translation');
@@ -173,5 +144,5 @@ function setup() {
     periodic.callback();
     assert.equal(acChecks, 2);
     assert.equal(batchChecks, 2, 'an already-visible tab must discover jobs started later in another window');
-    console.log('17 frontend regression scenarios passed.');
+    console.log('13 frontend regression scenarios passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
