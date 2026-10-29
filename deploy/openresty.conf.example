@@ -1,0 +1,34 @@
+# Replace cf.example.com and install its certificate before enabling HTTPS.
+# This server block belongs in 1Panel's www/conf.d directory. The password
+# file must be outside any static document root and readable by OpenResty.
+server {
+    listen 80;
+    server_name cf.example.com;
+    location ^~ /.well-known/acme-challenge/ {
+        root /www/sites/cf/acme;
+    }
+    location / { return 301 https://cf.example.com$request_uri; }
+}
+server {
+    listen 443 ssl;
+    server_name cf.example.com;
+    ssl_certificate /www/sites/cf/ssl/fullchain.pem;
+    ssl_certificate_key /www/sites/cf/ssl/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 2m;
+    auth_basic "Private CF";
+    auth_basic_user_file /www/sites/cf/.htpasswd;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Robots-Tag "noindex, nofollow" always;
+    add_header Cache-Control "no-store" always;
+    location / {
+        proxy_pass http://127.0.0.1:18780;
+        proxy_set_header Host 127.0.0.1:18780;
+        # Browser Origin is checked against CF_MIRROR_PUBLIC_ORIGIN by Flask.
+        # Never forward the browser's Basic password into the application.
+        proxy_set_header Authorization "";
+        proxy_set_header X-Forwarded-For "";
+        proxy_set_header Forwarded "";
+        proxy_read_timeout 180s;
+    }
+}

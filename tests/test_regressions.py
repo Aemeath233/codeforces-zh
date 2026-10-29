@@ -298,6 +298,23 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/problems?page=nope").status_code, 400)
         self.assertEqual(self.client.post("/api/batch-translate/start", json={"problems": [{"contest_id": 4, "index": "A?bad"}]}).status_code, 400)
 
+    def test_private_proxy_origin_keeps_local_host_and_cross_site_guards(self):
+        with patch.dict(app.config, PUBLIC_ORIGIN="https://cf.example.test"):
+            response = self.client.post("/api/config/system_prompt",
+                                        json={"system_prompt": "中文翻译"},
+                                        headers={"Origin": "https://cf.example.test"})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(self.client.get("/problemset").headers["Cache-Control"], "no-store")
+            for headers in ({"Origin": "https://evil.example.test"},
+                            {"Origin": "https://cf.example.test", "Sec-Fetch-Site": "cross-site"},
+                            {"Host": "cf.example.test"},
+                            {"Host": "evil.example.test", "X-Forwarded-Host": "localhost"}):
+                self.assertEqual(self.client.get("/api/config/llm", headers=headers).status_code, 403)
+            self.assertEqual(self.client.get("/api/health", environ_overrides={
+                "REMOTE_ADDR": "198.51.100.10"}).status_code, 403)
+        self.assertEqual(self.client.get("/api/health", headers={
+            "Origin": "https://cf.example.test"}).status_code, 403)
+
     def test_cached_pages_render_sanitized_content_and_sample_handlers(self):
         data = source()
         data["description_html"] += '<script>window.BAD=1</script>'

@@ -33,6 +33,16 @@ logger = logging.getLogger(__name__)
 # Initialize Flask App
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
+# A password-protected HTTPS reverse proxy may supply one public browser origin.
+# This setting does not enable remote listening or provide authentication itself.
+public_origin = os.getenv("CF_MIRROR_PUBLIC_ORIGIN", "").rstrip("/")
+if public_origin:
+    parsed_origin = urlsplit(public_origin)
+    if (parsed_origin.scheme != "https" or not parsed_origin.hostname
+            or parsed_origin.username or parsed_origin.password
+            or parsed_origin.path or parsed_origin.query or parsed_origin.fragment):
+        raise RuntimeError("CF_MIRROR_PUBLIC_ORIGIN must be an HTTPS origin without a path")
+app.config["PUBLIC_ORIGIN"] = public_origin
 
 
 # Register Blueprints
@@ -66,7 +76,7 @@ def check_client_ip():
     if urlsplit(request.host_url).hostname not in ("localhost", "127.0.0.1", "::1"):
         return jsonify({"detail": "只允许通过 localhost 或 127.0.0.1 访问"}), 403
     origin = request.headers.get("Origin")
-    if origin and origin != request.host_url.rstrip("/"):
+    if origin and origin not in (request.host_url.rstrip("/"), app.config["PUBLIC_ORIGIN"]):
         return jsonify({"detail": "已拒绝其他网站发起的本地请求"}), 403
     if request.path.startswith("/api/") and request.headers.get("Sec-Fetch-Site") == "cross-site":
         return jsonify({"detail": "已拒绝跨站请求"}), 403
@@ -80,7 +90,7 @@ def response_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "same-origin"
     response.headers["X-Frame-Options"] = "DENY"
-    if request.path.startswith("/api/") or request.path == "/settings":
+    if app.config["PUBLIC_ORIGIN"] or request.path.startswith("/api/") or request.path == "/settings":
         response.headers["Cache-Control"] = "no-store"
     if request.path.startswith("/api/") and response.status_code >= 400:
         logger.warning("%s %s: %s (%.0fms)", request.method, request.path, response.status_code,

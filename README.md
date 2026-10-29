@@ -52,6 +52,8 @@ macOS / Linux 对应使用 `.venv/bin/python` 启动，或按上面的 uv 命令
 
 ## 首次配置
 
+私人服务器部署见 [部署说明](deploy/README.md)。公网必须使用 HTTPS 和覆盖整站的密码验证，不能只隐藏首页或设置页。
+
 1. 打开“设置 → 大模型 API”，添加一个可用节点。
 2. 填写 API Key、模型名称和接口地址，例如 `https://api.example.com/v1`；地址不需要附加 `/chat/completions`。
 3. 按需测试连接，再从题库打开一道题目开始翻译。

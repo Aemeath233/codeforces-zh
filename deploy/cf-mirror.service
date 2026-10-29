@@ -1,0 +1,23 @@
+[Unit]
+Description=Private Codeforces Chinese practice assistant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cfmirror
+Group=cfmirror
+WorkingDirectory=/opt/cf-mirror/current
+EnvironmentFile=/etc/cf-mirror/cf-mirror.env
+ExecStart=/opt/cf-mirror/current/.venv/bin/python main.py
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cf-mirror
+
+[Install]
+WantedBy=multi-user.target
