@@ -14,6 +14,7 @@ from core.database import init_db
 from core.pages import pages_bp
 from core.paths import get_data_path
 from core.process_identity import get_process_identity
+from core.web_security import validate_proxy_origin
 
 # Advanced Logging Configuration
 log_formatter = logging.Formatter(
@@ -33,15 +34,9 @@ logger = logging.getLogger(__name__)
 # Initialize Flask App
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
-# A password-protected HTTPS reverse proxy may supply one public browser origin.
+# A protected HTTPS or private VPN reverse proxy may supply one browser origin.
 # This setting does not enable remote listening or provide authentication itself.
-public_origin = os.getenv("CF_MIRROR_PUBLIC_ORIGIN", "").rstrip("/")
-if public_origin:
-    parsed_origin = urlsplit(public_origin)
-    if (parsed_origin.scheme != "https" or not parsed_origin.hostname
-            or parsed_origin.username or parsed_origin.password
-            or parsed_origin.path or parsed_origin.query or parsed_origin.fragment):
-        raise RuntimeError("CF_MIRROR_PUBLIC_ORIGIN must be an HTTPS origin without a path")
+public_origin = validate_proxy_origin(os.getenv("CF_MIRROR_PUBLIC_ORIGIN", ""))
 app.config["PUBLIC_ORIGIN"] = public_origin
 
 

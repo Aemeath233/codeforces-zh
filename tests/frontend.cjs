@@ -48,6 +48,15 @@ function setup() {
     assert.equal(t.notices.at(-1).type, 'error');
 
     t = setup();
+    delete t.context.navigator.clipboard;
+    let legacyCopy = '';
+    t.context.document.body.appendChild = element => { legacyCopy = element.value; };
+    t.context.document.execCommand = command => command === 'copy';
+    assert.equal(await t.context.copyTextToClipboard('VPN sample\n8\n', '已复制'), true);
+    assert.equal(legacyCopy, 'VPN sample\n8\n');
+    assert.equal(t.notices.at(-1).type, 'success');
+
+    t = setup();
     t.context.localStorage.getItem = () => { throw Error('Storage disabled'); };
     assert.equal(t.context.officialSubmitUrl(), 'https://codeforces.com/contest/4/submit?submittedProblemIndex=A');
 
@@ -144,5 +153,5 @@ function setup() {
     periodic.callback();
     assert.equal(acChecks, 2);
     assert.equal(batchChecks, 2, 'an already-visible tab must discover jobs started later in another window');
-    console.log('13 frontend regression scenarios passed.');
+    console.log('14 frontend regression scenarios passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -41,6 +41,7 @@ from core.translator import (
     translate_problem,
     validate_translation,
 )
+from core.web_security import validate_proxy_origin
 from main import app
 
 
@@ -314,6 +315,20 @@ class RegressionTests(unittest.TestCase):
                 "REMOTE_ADDR": "198.51.100.10"}).status_code, 403)
         self.assertEqual(self.client.get("/api/health", headers={
             "Origin": "https://cf.example.test"}).status_code, 403)
+
+    def test_vpn_origin_is_explicit_and_rejects_plaintext_public_origins(self):
+        self.assertEqual(validate_proxy_origin("http://10.77.0.1:18780/"), "http://10.77.0.1:18780")
+        self.assertEqual(validate_proxy_origin("https://cf.example.test"), "https://cf.example.test")
+        for origin in ("http://example.test", "http://47.94.222.194:18780", "http://0.0.0.0",
+                       "http://127.0.0.1", "https://user:password@example.test",
+                       "http://10.77.0.1:99999", "http://10.77.0.1/path", "http://10.77.0.1?key=x"):
+            with self.subTest(origin=origin), self.assertRaises(RuntimeError):
+                validate_proxy_origin(origin)
+        with patch.dict(app.config, PUBLIC_ORIGIN="http://10.77.0.1:18780"):
+            self.assertEqual(self.client.post("/api/config/system_prompt",
+                json={"system_prompt": "中文翻译"}, headers={"Origin": "http://10.77.0.1:18780"}).status_code, 200)
+            self.assertEqual(self.client.get("/api/health", headers={
+                "Origin": "https://cf.homeofmjr.top"}).status_code, 403)
 
     def test_cached_pages_render_sanitized_content_and_sample_handlers(self):
         data = source()
