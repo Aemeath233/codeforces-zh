@@ -5,6 +5,7 @@ function switchSettingsTab(tabName) {
     });
     document.querySelectorAll('.settings-tab').forEach(tab => {
         tab.classList.remove('active');
+        tab.setAttribute('aria-pressed', 'false');
     });
 
     const pane = document.getElementById(`pane-${tabName}`);
@@ -13,6 +14,7 @@ function switchSettingsTab(tabName) {
     if (pane && tabBtn) {
         pane.classList.add('active');
         tabBtn.classList.add('active');
+        tabBtn.setAttribute('aria-pressed', 'true');
         cfStorage.setItem('settings_active_tab', tabName);
     }
 

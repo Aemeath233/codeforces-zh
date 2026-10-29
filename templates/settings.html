@@ -12,23 +12,23 @@
     </div>
 
     <!-- Settings Tabs Navigation -->
-    <div class="settings-tabs-container">
-        <div class="settings-tab active" id="tab-btn-status" onclick="switchSettingsTab('status')">
+    <div class="settings-tabs-container" role="group" aria-label="设置分类">
+        <button type="button" class="settings-tab active" id="tab-btn-status" aria-controls="pane-status" aria-pressed="true" onclick="switchSettingsTab('status')">
             <i data-lucide="activity"></i>
             <span>运行状态</span>
-        </div>
-        <div class="settings-tab" id="tab-btn-account" onclick="switchSettingsTab('account')">
+        </button>
+        <button type="button" class="settings-tab" id="tab-btn-account" aria-controls="pane-account" aria-pressed="false" onclick="switchSettingsTab('account')">
             <i data-lucide="user"></i>
             <span>账号与提交</span>
-        </div>
-        <div class="settings-tab" id="tab-btn-api" onclick="switchSettingsTab('api')">
+        </button>
+        <button type="button" class="settings-tab" id="tab-btn-api" aria-controls="pane-api" aria-pressed="false" onclick="switchSettingsTab('api')">
             <i data-lucide="cpu"></i>
             <span>翻译模型</span>
-        </div>
-        <div class="settings-tab" id="tab-btn-prompt" onclick="switchSettingsTab('prompt')">
+        </button>
+        <button type="button" class="settings-tab" id="tab-btn-prompt" aria-controls="pane-prompt" aria-pressed="false" onclick="switchSettingsTab('prompt')">
             <i data-lucide="code-2"></i>
             <span>翻译要求</span>
-        </div>
+        </button>
     </div>
 
     <!-- Tab Pane 1: System Status -->
@@ -209,10 +209,10 @@
                 </div>
                 {% else %}
                     {% for node in llm_configs %}
-                    <div id="node-card-{{ node.id }}" style="border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; background-color: {% if node.is_active %}var(--bg-card){% else %}var(--bg-hover){% endif %}; display: flex; flex-direction: column; gap: 12px;">
+                    <div class="model-card" id="node-card-{{ node.id }}" style="border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; background-color: {% if node.is_active %}var(--bg-card){% else %}var(--bg-hover){% endif %}; display: flex; flex-direction: column; gap: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div style="display: flex; align-items: center; gap: 12px;">
-                                <button onclick='toggleActive({{ node|tojson }})' style="background: none; border: none; cursor: pointer; color: {% if node.is_active %}var(--primary){% else %}var(--text-muted){% endif %};">
+                                <button aria-label="启用模型 {{ node.name }}" aria-pressed="{{ 'true' if node.is_active else 'false' }}" onclick='toggleActive({{ node|tojson }})' style="background: none; border: none; cursor: pointer; color: {% if node.is_active %}var(--primary){% else %}var(--text-muted){% endif %};">
                                     <i data-lucide="{% if node.is_active %}toggle-right{% else %}toggle-left{% endif %}" style="width: 32px; height: 32px;"></i>
                                 </button>
                                 <div>

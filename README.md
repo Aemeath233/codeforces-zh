@@ -8,6 +8,8 @@
 
 [窄屏预览](docs/practice-mobile.png)
 
+[新版阅读布局](docs/practice-polished.png) · [前端审查与调整记录](docs/frontend-review-2026-10-29.md)
+
 > 截图使用离线测试数据，展示功能与排版，不代表实际模型的翻译质量。
 
 ## 功能

@@ -46,12 +46,14 @@ function initInputs() {
 function renderTagFilters() {
     const container = document.getElementById('tags-container');
     if (!container) return;
+    const focusedTag = container.contains(document.activeElement) ? document.activeElement.textContent.trim() : null;
     let html = '';
     POPULAR_TAGS.forEach(tag => {
         const isActive = tag === selectedTag;
         html += `
             <button
                 type="button"
+                aria-pressed="${isActive}"
                 onclick="handleTagClick('${tag}')"
                 style="padding: 4px 10px; border-radius: 20px; font-size: 12px; border: 1px solid ${isActive ? 'var(--primary)' : 'var(--border-color)'}; background-color: ${isActive ? 'var(--primary-light)' : 'var(--bg-card)'}; color: ${isActive ? 'var(--primary)' : 'var(--text-secondary)'}; cursor: pointer; font-weight: ${isActive ? 600 : 500}; transition: all var(--transition-fast);"
             >
@@ -60,6 +62,7 @@ function renderTagFilters() {
         `;
     });
     container.innerHTML = html;
+    if (focusedTag) Array.from(container.querySelectorAll('button')).find(button => button.textContent.trim() === focusedTag)?.focus();
 }
 
 function handleTagClick(tag) {
@@ -264,6 +267,7 @@ function renderTable() {
                         type="checkbox"
                         class="row-checkbox"
                         data-id="${p.id}"
+                        aria-label="选择题目 ${p.contest_id}${escapeHtml(p.index)}"
                         ${isSelected ? 'checked' : ''}
                         onclick="handleRowCheckbox(this, '${p.id}')"
                         style="cursor: pointer; transform: scale(1.15);"
@@ -459,11 +463,18 @@ function handleSortByRating() {
     page = 1;
     saveState();
 
+    updateRatingSortIndicator();
+    loadProblems();
+}
+
+function updateRatingSortIndicator() {
+    document.getElementById('rating-column')?.setAttribute('aria-sort', sortBy === 'rating' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none');
+
     // Update sorting indicators
     const indicator = document.getElementById('sort-indicator');
     if (indicator) {
         if (sortBy === 'rating') {
-            indicator.innerText = sortOrder === 'asc' ? '🔼' : '🔽';
+            indicator.innerText = sortOrder === 'asc' ? '↑' : '↓';
             indicator.style.opacity = '1';
         } else {
             indicator.innerText = '⇅';
@@ -471,7 +482,6 @@ function handleSortByRating() {
         }
     }
 
-    loadProblems();
 }
 
 // Row selection checkboxes logic
@@ -544,5 +554,6 @@ async function startBatchTranslation() {
 
 // Initialize on execution
 initInputs();
+updateRatingSortIndicator();
 renderTagFilters();
 loadProblems();

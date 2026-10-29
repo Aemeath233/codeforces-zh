@@ -7,10 +7,12 @@
     
     <!-- Local CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/practice.css') }}">
     
     <script src="{{ url_for('static', filename='js/lucide.min.js') }}" defer></script>
 
-    <!-- MathJax 3 Configuration -->
+    {% if active_tab == 'problem' %}
+    <!-- MathJax is only needed by statement pages. -->
     <script>
       window.MathJax = {
         loader: {
@@ -35,9 +37,11 @@
     </script>
     <!-- Local MathJax Library -->
     <script id="MathJax-script" async src="{{ url_for('static', filename='mathjax/tex-mml-svg.js') }}"></script>
+    {% endif %}
     {% block head %}{% endblock %}
 </head>
 <body data-page="{{ active_tab|default('') }}">
+    <a href="#main-content-body" class="skip-link">跳到正文</a>
     <div class="app-container">
         <!-- Top Navigation Bar -->
         <header class="top-navbar">
@@ -76,13 +80,13 @@
 
         <!-- Main Content Wrapper -->
         <main class="main-content">
-            <div id="main-content-body">
+            <div id="main-content-body" tabindex="-1">
                 {% block content %}{% endblock %}
             </div>
         </main>
 
         <!-- Toast Notifications Overlay -->
-        <div id="toast-container" style="position: fixed; bottom: 24px; right: 24px; z-index: 1000; display: flex; flex-direction: column; gap: 10px;">
+        <div id="toast-container" role="status" aria-live="polite" aria-atomic="false" style="position: fixed; bottom: 24px; right: 24px; z-index: 1000; display: flex; flex-direction: column; gap: 10px;">
             <!-- Toasts populated dynamically via app.js -->
         </div>
 

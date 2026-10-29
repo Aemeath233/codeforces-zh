@@ -330,6 +330,19 @@ class RegressionTests(unittest.TestCase):
             self.assertEqual(self.client.get("/api/health", headers={
                 "Origin": "https://cf.homeofmjr.top"}).status_code, 403)
 
+    def test_non_reading_pages_do_not_load_mathjax_and_controls_are_named(self):
+        library = self.client.get("/problemset").get_data(as_text=True)
+        self.assertNotIn('id="MathJax-script"', library)
+        self.assertIn('for="searchQuery"', library)
+        self.assertIn('for="minRating"', library)
+        self.assertIn('class="sort-button"', library)
+        settings = self.client.get("/settings").get_data(as_text=True)
+        self.assertNotIn('id="MathJax-script"', settings)
+        self.assertIn('<button type="button" class="settings-tab', settings)
+        self.assertIn('aria-controls="pane-api"', settings)
+        reader = self.client.get("/problem/4/A").get_data(as_text=True)
+        self.assertIn('id="MathJax-script"', reader)
+
     def test_cached_pages_render_sanitized_content_and_sample_handlers(self):
         data = source()
         data["description_html"] += '<script>window.BAD=1</script>'

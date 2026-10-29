@@ -5,7 +5,7 @@
 {% block content %}
 <div>
     <!-- Page Header -->
-    <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div class="page-header library-heading">
         <div>
             <h1 class="page-title">题库</h1>
             <p class="page-subtitle">按名称、难度或标签，找一道想做的题。</p>
@@ -24,9 +24,11 @@
     <!-- Modern Filter Dashboard Panel -->
     <div class="search-container">
         <form id="filter-form" onsubmit="handleSearchSubmit(event)" style="display: flex; flex-direction: column; gap: 16px;">
-            <div class="search-row">
+            <div class="search-row library-filters">
                 <!-- Keyword search -->
-                <div class="search-input-wrapper" style="flex-grow: 3;">
+                <div class="filter-field keyword-field">
+                    <label for="searchQuery">搜索题目</label>
+                    <div class="search-input-wrapper">
                     <i data-lucide="search" class="search-icon" style="width: 20px; height: 20px;"></i>
                     <input
                         type="text"
@@ -34,24 +36,30 @@
                         class="search-input"
                         placeholder="题目名称、题号（如 4A）或 CF 题目链接"
                     />
+                    </div>
                 </div>
 
                 <!-- Rating Boundaries -->
-                <div style="display: flex; align-items: center; gap: 6px; flex-grow: 1;">
+                <div class="filter-field">
+                    <label for="minRating">最低难度</label>
                     <input
                         type="number"
                         id="minRating"
                         class="form-input"
                         style="padding: 12.5px 12px; min-width: 80px;"
-                        placeholder="Min Rating (如 800)"
+                        placeholder="不限"
+                        min="0" step="1"
                     />
-                    <span style="color: var(--text-secondary);">-</span>
+                </div>
+                <div class="filter-field">
+                    <label for="maxRating">最高难度</label>
                     <input
                         type="number"
                         id="maxRating"
                         class="form-input"
                         style="padding: 12.5px 12px; min-width: 80px;"
-                        placeholder="Max Rating (如 2000)"
+                        placeholder="不限"
+                        min="0" step="1"
                     />
                 </div>
 
@@ -84,7 +92,7 @@
     </div>
 
     <!-- Grid Library List -->
-    <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; box-shadow: var(--shadow-premium); display: flex; flex-direction: column; gap: 20px;">
+    <div class="library-panel">
 
         <!-- Batch Control Panel -->
         <div id="batch-control-panel" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background-color: var(--bg-hover); border: 1px solid var(--border-color); border-radius: 10px; flex-wrap: wrap; gap: 12px; margin-bottom: 4px;">
@@ -119,11 +127,11 @@
                         </th>
                         <th style="padding: 12px 16px; width: 150px;">题号</th>
                         <th style="padding: 12px 16px; width: 35%;">题目名称</th>
-                        <th onclick="handleSortByRating()" style="padding: 12px 16px; width: 130px; cursor: pointer; user-select: none;" class="hover-sortable" title="点击按难度评分排序">
-                            <div style="display: flex; align-items: center; gap: 4px;">
+                        <th id="rating-column" aria-sort="none" style="padding: 12px 16px; width: 130px;">
+                            <button type="button" class="sort-button" onclick="handleSortByRating()">
                                 <span>难度</span>
                                 <span id="sort-indicator" style="opacity: 0.3;">⇅</span>
-                            </div>
+                            </button>
                         </th>
                         <th style="padding: 12px 16px; width: 130px;">通过人数</th>
                         <th style="padding: 12px 16px;">标签</th>
@@ -146,7 +154,7 @@
                 <div style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--text-secondary);">
                     <span>每页显示:</span>
                     <select
-                        id="limit-select"
+                        id="limit-select" aria-label="每页题目数量"
                         onchange="handleLimitChange(this.value)"
                         style="padding: 4px 8px; font-size: 13.5px; font-weight: 600; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background-color: var(--bg-sidebar); color: var(--text-primary); outline: none; cursor: pointer;"
                     >
@@ -168,7 +176,7 @@
                 <form onsubmit="handleJumpPage(event)" style="display: flex; align-items: center; gap: 6px;">
                     <input
                         type="number"
-                        id="jump-page-input"
+                        id="jump-page-input" aria-label="跳转页码"
                         placeholder="页码..."
                         style="width: 64px; padding: 6px 8px; font-size: 13px; text-align: center; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background-color: var(--bg-sidebar); color: var(--text-primary); outline: none;"
                     />

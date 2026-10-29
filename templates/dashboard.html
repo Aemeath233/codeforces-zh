@@ -5,7 +5,7 @@
 {% block content %}
 <div>
     <div class="page-header">
-        <h1 class="page-title">Codeforces 官方比赛大厅 (Contests)</h1>
+        <h1 class="page-title">比赛</h1>
         <p class="page-subtitle">浏览比赛，选择题目开始练习。</p>
     </div>
 
@@ -13,7 +13,7 @@
     <div class="contest-panel">
         <div class="panel-title" style="display: flex; align-items: center; gap: 8px;">
             <i data-lucide="award" style="color: var(--primary); width: 20px; height: 20px;"></i>
-            <span>Codeforces 官方比赛大厅 (Contests)</span>
+            <span>比赛</span>
         </div>
 
         <!-- Contest Search & Filter Toolbar -->
@@ -24,6 +24,7 @@
                 <input
                     type="text"
                     id="contest-search"
+                    aria-label="搜索比赛名称或 ID"
                     placeholder="搜索比赛名称或 ID..."
                     style="width: 100%; padding: 8px 12px 8px 36px; font-size: 14px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background-color: var(--bg-sidebar); outline: none; color: var(--text-primary); transition: border-color var(--transition-fast);"
                 />
@@ -43,7 +44,7 @@
         <div id="contest-list-container" class="contest-list" style="max-height: 600px; overflow-y: auto;">
             <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
                 <i data-lucide="refresh-cw" class="spinner" style="color: var(--primary); margin-bottom: 8px; width: 24px; height: 24px;"></i>
-                <div>正在同步 Codeforces 比赛大厅...</div>
+                <div>正在加载比赛…</div>
             </div>
         </div>
 
@@ -61,7 +62,7 @@
                     <span class="modal-title" id="modal-contest-name">加载中...</span>
                     <span class="modal-subtitle" id="modal-contest-subtitle">选择题目</span>
                 </div>
-                <button class="modal-close-btn" onclick="closeContestModal()">
+                <button class="modal-close-btn" aria-label="关闭比赛详情" onclick="closeContestModal()">
                     <i data-lucide="x" style="width: 18px; height: 18px;"></i>
                 </button>
             </div>
